@@ -9,4 +9,4 @@ This is the repository for the cleaning, analysis and visualisation of biolog pl
 - Open package_install.R and run that script. This will install all of the packages necessary to run the script.
 - Open analysis.R and this will run the script for the cleaning, analysis and visualisation of the biolog plate data
 
-Any problems please email d.padfield@exeter.ac.uk or post in the [Issues tab]()
+Any problems please email d.padfield@exeter.ac.uk or post in the [Issues tab](https://github.com/padpadpadpad/alex_biolog/issues)
