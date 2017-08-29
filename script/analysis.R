@@ -152,3 +152,6 @@ ggplot(d_noWT) +
   scale_color_viridis(discrete = TRUE) +
   geom_point(aes(x = WT, y = factor(rank)), size = 0.5) +
   theme_bw()
+
+ggsave(file.path(path_fig, 'crazy_ggjoy_plot.pdf'), last_plot(), height = 12, width = 6)
+
