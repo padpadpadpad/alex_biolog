@@ -32,21 +32,24 @@ plot1a <- group_by(d_stack, id) %>%
 arrange(., desc(OD)) %>%
   mutate(., rank = 1:96) %>%
   ggplot(.) +
-  geom_line(aes(rank, OD, group = id), alpha = 0.25) +
+  geom_line(aes(rank, OD, group = id, col = treatment), alpha = 0.75) +
+  scale_color_viridis(discrete = TRUE) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
-  theme(legend.position = 'none') +
+  theme(legend.position = c(0.9, 0.8)) +
   ylab('optical density') +
   xlab('substrate rank') +
-  ggtitle('Substrate rank across populations')
+  ggtitle('Substrate rank across populations') +
+  guides(col = guide_legend(override.aes = list(alpha = 1)))
 
 # plot performance across well, without ranking by best performance
 plot1b <- ggplot(d_stack) +
-  geom_line(aes(C_source, OD, group = id), alpha = 0.25) +
+  geom_line(aes(C_source, OD, group = id, col = treatment), alpha = 0.4) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
   theme(legend.position = 'none') +
   ylab('optical density') +
   xlab('substrate') +
-  ggtitle('Performance across substrates')
+  ggtitle('Performance across substrates') +
+  scale_color_viridis(discrete = TRUE) 
 
 plot1 <- gridExtra::grid.arrange(plot1a, plot1b, ncol = 1)
 
