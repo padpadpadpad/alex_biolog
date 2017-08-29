@@ -14,12 +14,14 @@ d <- MicrobioUoE::bind_biolog_all('data/biolog_data_assay_1.xlsx', sheets = 'She
 
 # make into long format ####
 
+# meta data
+meta <- data.frame(id = 1:50, treatment = c(rep('comm', times = 24), rep('no_comm', times = 24), rep('wild_type', times = 2)), stringsAsFactors = FALSE)
+
+# data and metadata together
+d <- merge(d, meta, by = 'id')
+
 # which columns are substrates
 Carb_cols <- colnames(d)[grepl('X', colnames(d))]
-
-# filter out blank
-blank <- filter(d, id == max(id))
-d <- filter(d, id < max(id))
 
 # stack
 d_stack <- gather_(d, 'C_source', 'OD', Carb_cols) %>%
