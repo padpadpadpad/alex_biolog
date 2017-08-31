@@ -10,7 +10,9 @@ pkgs <- c('tidyr',
           'nlme',
           'readxl',
           'devtools',
-          'gridExtra')
+          'gridExtra',
+          'viridis',
+          'ggjoy')
 
 # check if they are already installed
 new_pkgs <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
@@ -19,11 +21,11 @@ new_pkgs <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
 if(length(new_pkgs)) install.packages(new_pkgs)
 
 # GitHub packages ####
-# github pack age to install
+# github packages to install
 github_packages <- 'padpadpadpad/MicrobioUoE'
 
 # check if they are already installed
-new_pkgs <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
+new_pkgs <- github_packages[!(github_packages %in% installed.packages()[,"Package"])]
 
 # install packages
 if(length(new_pkgs)) devtools::install_github(new_pkgs)
