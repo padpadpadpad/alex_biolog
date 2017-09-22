@@ -12,7 +12,7 @@ pkgs <- c('tidyr',
           'devtools',
           'gridExtra',
           'viridis',
-          'ggjoy')
+          'ggridges')
 
 # check if they are already installed
 new_pkgs <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]

@@ -5,7 +5,7 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(viridis)
-library(ggjoy)
+library(ggridges)
 
 # figure path
 path_fig <- 'figs'
@@ -147,7 +147,7 @@ gridExtra::grid.arrange(V_G_plot, V_E_plot, ncol = 2)
 
 # plot all carbon sources
 ggplot(d_noWT) +
-  geom_joy2(aes(x = OD_cor, y = factor(rank), fill = treatment, col = treatment), alpha = 0.5, rel_min_height = 0.01) +
+  geom_density_ridges2(aes(x = OD_cor, y = factor(rank), fill = treatment, col = treatment), alpha = 0.5, rel_min_height = 0.01) +
   scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
   geom_point(aes(x = WT, y = factor(rank)), size = 0.5) +
@@ -155,3 +155,79 @@ ggplot(d_noWT) +
 
 ggsave(file.path(path_fig, 'crazy_ggjoy_plot.pdf'), last_plot(), height = 12, width = 6)
 
+# try a pca
+d <- unite(d, 'id2', c(treatment, id), sep = '_', remove = FALSE)
+
+# data set ready for PCA
+d_PCA <- filter(d, id < 50) %>%
+  select(., starts_with('X'))
+row.names(d_PCA) <- d$id2[1:49]
+
+# create matrix
+Euclid_mat <- dist(d_PCA)
+
+# get variables for PCA
+d_vars <- filter(d, id < 50) %>%
+  select(., id, id2, treatment) %>%
+  mutate(., treatment = as.factor(treatment))
+row.names(d_vars) <- 
+PCA <- prcomp(d_PCA)
+biplot(PCA)
+
+# quick and dirty beta disper model
+mod_adonis <- vegan::adonis(d_PCA ~ treatment, d_vars) # yes they have different centroids
+mctoolsr::calc_pairwise_permanovas(Euclid_mat, d_vars, 'treatment')
+
+Euclid_mat <- dist(d_PCA)
+mod <- vegan::betadisper(Euclid_mat, d_vars$treatment)
+anova(mod)
+TukeyHSD(mod)
+
+# get betadisper dataframes
+betadisper_dat <- get_betadisper_data(mod)
+
+# do some transformations on the data
+betadisper_dat$eigenvalue <- mutate(betadisper_dat$eigenvalue, percent = eig/sum(eig))
+
+# add convex hull points
+betadisper_dat$chull <- group_by(betadisper_dat$eigenvector, group) %>%
+  do(data.frame(PCoA1 = .$PCoA1[c(chull(.$PCoA1, .$PCoA2), chull(.$PCoA1, .$PCoA2)[1])],
+                PCoA2 = .$PCoA2[c(chull(.$PCoA1, .$PCoA2), chull(.$PCoA1, .$PCoA2)[1])])) %>%
+  data.frame()
+
+# combine centroid and eigenvector dataframes to plot
+betadisper_lines <- merge(select(betadisper_dat$centroids, group, PCoA1, PCoA2), select(betadisper_dat$eigenvector, group, PCoA1, PCoA2), by = c('group'))
+
+ggplot() +
+  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 4) +
+  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$eigenvector) +
+  geom_path(aes(PCoA1, PCoA2, col = group), betadisper_dat$chull ) +
+  geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, col = group), betadisper_lines) +
+  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  ylab('PCoA Axis 2 [9.6%]') +
+  xlab('PCoA Axis 1 [30.8%]') +
+  scale_color_viridis('', discrete = TRUE) +
+  #coord_fixed(sqrt(betadisper_dat$eigenvalue$percent[2]/betadisper_dat$eigenvalue$percent[1])) +
+  coord_fixed() +
+  theme(legend.position = 'top') +
+  ggtitle('PCoA across treatments') +
+  guides(col = guide_legend(ncol = 8))
+
+ggsave(file.path(path_fig, 'PCoA_across_treatments.pdf'), last_plot(), height = 5, width = 7)
+
+
+# distance plot
+ggplot(filter(betadisper_dat$distances, group != 'wild_type'), aes(group, distances, fill = group, col = group)) +
+  geom_boxplot(outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
+  stat_summary(position = position_dodge(width = 0.55), geom = 'crossbar', fatten = 0, color = 'white', width = 0.4, fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x)))}) +
+  geom_point(shape = 21, fill ='white', position = position_jitterdodge(dodge.width = 0.55, jitter.width = 0.2)) +
+  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  scale_color_viridis('', discrete = TRUE, labels = c('Community', 'No Community')) +
+  scale_fill_viridis('', discrete = TRUE, labels = c('Community', 'No Community')) +
+  ylab('Distance to centroid') +
+  theme(legend.position = c(.83, .85)) +
+  xlab('') +
+  scale_x_discrete(labels = c('Community', 'No Community'))
+
+mod <- lm(distances ~ group, filter(betadisper_dat$distances, group != 'wild_type'))
+summary(mod)   
