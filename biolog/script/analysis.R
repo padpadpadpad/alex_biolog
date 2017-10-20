@@ -8,13 +8,13 @@ library(viridis)
 library(ggridges)
 
 # figure path
-path_fig <- 'figs'
+path_fig <- 'biolog/figs'
 
 # source extra functions
-source('script/functions.R')
+source('biolog/script/functions.R')
 
 # load in data ####
-d <- MicrobioUoE::bind_biolog_all('data/biolog_data_assay_1.xlsx', sheets = 'Sheet1')
+d <- MicrobioUoE::bind_biolog_all('biolog/data/biolog_data_assay_1.xlsx', sheets = 'Sheet1')
 
 # make into long format ####
 
