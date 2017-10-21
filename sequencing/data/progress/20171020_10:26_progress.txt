@@ -1,0 +1,54 @@
+Run started at  2017-10-20 10:26:05
+
+Filtering completed at  2017-10-20 10:10
+Forward error rates completed at 2017-10-20 11:50:03
+Forward error rate: 64.0960061435333 
+Forward error rate: 8.54059931635782 
+Forward error rate: 0.606884679624936 
+Forward error rate: 0.0800326763417878 
+Forward error rate: 0.0208141913521865 
+Forward error rate: 0.00485905142910594 
+Forward error rate: 0.00137912041161187 
+Forward error rate: 0.000161807225098644 
+Forward error rate: 8.19574988054081e-06 
+Forward error rate: 0
+Reverse error rates completed at 2017-10-20 15:31:43
+Reverse error rates: 59.841556186429 
+Reverse error rates: 3.56914379374642 
+Reverse error rates: 0.159589890134516 
+Reverse error rates: 0.018469970979649 
+Reverse error rates: 0.0129116288725858 
+Reverse error rates: 0.0189928911528484 
+Reverse error rates: 0.0208209523455539 
+Reverse error rates: 0.015330825950597 
+Reverse error rates: 0.0182080751598847 
+Reverse error rates: 0.0209469698875348 
+Reverse error rates: 0.0182842515064108 
+Reverse error rates: 0.0176715704222353 
+Reverse error rates: 0.013438249567549 
+Reverse error rates: 0.0196470596611347 
+Reverse error rates: 0.0163531188857191 
+Reverse error rates: 0.0227428489435428 
+Reverse error rates: 0.0174507888416454 
+Reverse error rates: 0.0181947865770341 
+Reverse error rates: 0.0183004555876038 
+Reverse error rates: 0.0158686662089546 
+Reverse error rates: 0.0127604978572439 
+Reverse error rates: 0.0186536448541958 
+Reverse error rates: 0.0176148889987744 
+Reverse error rates: 0.0177850005097259 
+Reverse error rates: 0.01724864781709 
+Reverse error rates: 0.0179136134029434 
+Reverse error rates: 0.0173560873106323 
+Reverse error rates: 0.0112627668528953 
+Reverse error rates: 0.0166528338144268 
+Reverse error rates: 0.0172145269002061
+Forward sequences inferred 2017-10-20 17:36:25
+Reverse sequences inferred 2017-10-20 18:24:40
+Inferred forward and reverse sequences merged 2017-10-20 18:27:23
+Sequence table constructed 2017-10-20 18:27:23
+Chimeric sequences removed 2017-10-20 19:45:30
+Taxonomy assigned 2017-10-20 19:54:54
+Sequences aligned 2017-10-20 20:01:43
+Constructed phylogenetic tree 2017-10-21 02:37:26
+End of raw read processing 2017-10-21 02:37:26

@@ -2,4 +2,7 @@
 .DS_Store
 .Rhistory
 
-sequencing/raw_data/*
+# do not track some data folders as they are too big
+sequencing/data/raw_data/*
+sequencing/data/Filtered/*
+sequencing/data/ref_trainsets/*

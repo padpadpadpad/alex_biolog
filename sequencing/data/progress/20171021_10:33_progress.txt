@@ -1,0 +1,46 @@
+Run started at  2017-10-21 10:33:42
+
+Filtering completed at  2017-10-21 10:10
+Forward error rates completed at 2017-10-21 10:46:34
+Forward error rate: 63.8102715133549 
+Forward error rate: 8.38143920695977 
+Forward error rate: 0.681372800299903 
+Forward error rate: 0.101823320502548 
+Forward error rate: 0.0127093408263513 
+Forward error rate: 0.00384217839978588 
+Forward error rate: 0.00575483019985249 
+Forward error rate: 0 
+Forward error rate: 0.00363949255936125
+Reverse error rates completed at 2017-10-21 11:21:34
+Reverse error rates: 60.118036638406 
+Reverse error rates: 3.60156142705157 
+Reverse error rates: 0.193191448129019 
+Reverse error rates: 0.0548209800943646 
+Reverse error rates: 0.0443305203905089 
+Reverse error rates: 0.0314089203350747 
+Reverse error rates: 0.0462550766352983 
+Reverse error rates: 0.043221204233619 
+Reverse error rates: 0.038039342087351 
+Reverse error rates: 0.0387912147409559 
+Reverse error rates: 0.0413274263714544 
+Reverse error rates: 0.0453481365739308 
+Reverse error rates: 0.0455983108758532 
+Reverse error rates: 0.0445739117048373 
+Reverse error rates: 0.0360806674939564
+Dereplicated forward and reverse files 2017-10-21 11:21:50
+Forward error rates completed at 2017-10-21 11:26:51
+Forward error rate: 63.8102715133549 
+Forward error rate: 8.1992154242401
+Reverse error rates completed at 2017-10-21 11:30:52
+Reverse error rates: 60.118036638406 
+Reverse error rates: 3.51003294999992
+Dereplicated forward and reverse files 2017-10-21 11:35:42
+Forward sequences inferred 2017-10-21 11:39:16
+Reverse sequences inferred 2017-10-21 11:46:40
+Inferred forward and reverse sequences merged 2017-10-21 11:47:11
+Sequence table constructed 2017-10-21 11:47:11
+Chimeric sequences removed 2017-10-21 11:55:37
+Taxonomy assigned 2017-10-21 12:04:04
+Sequences aligned 2017-10-21 12:04:36
+Constructed phylogenetic tree 2017-10-21 12:21:27
+End of raw read processing 2017-10-21 12:21:28
