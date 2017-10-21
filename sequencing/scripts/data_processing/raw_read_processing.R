@@ -103,7 +103,7 @@ if(length(grep('fwd_error', ls())) == 0){
   dd_learnF <- learnErrors(filtFs, 
                            multithread = TRUE,
                            randomize = TRUE,
-                           MAX_CONSIST = 2)
+                           MAX_CONSIST = 30)
   errF <- dd_learnF$err_out
   cat(paste('\nForward error rates completed at', Sys.time()), file = progress_file, append = TRUE)
   cat(paste('\nForward error rate:', dada2:::checkConvergence(dd_learnF), sep = ' '), file = progress_file, append = TRUE)
@@ -111,7 +111,7 @@ if(length(grep('fwd_error', ls())) == 0){
   dd_learnR <- learnErrors(filtRs, 
                            multithread = TRUE,
                            randomize = TRUE,
-                           MAX_CONSIST = 2)
+                           MAX_CONSIST = 30)
   errR <- dd_learnR$err_out
   cat(paste('\nReverse error rates completed at', Sys.time()), file = progress_file, append = TRUE)
   cat(paste('\nReverse error rates:', dada2:::checkConvergence(dd_learnR), sep = ' '), file = progress_file, append = TRUE)
