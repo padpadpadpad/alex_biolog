@@ -58,3 +58,5 @@ install.packages('PMA')
 # bingo - re-run to check
 MicrobioUoE::package_install_all(cran_packages = cran_packages, github_packages = github_packages, bioc_packages = bioc_packages)
 # Huzzah
+
+# change this test

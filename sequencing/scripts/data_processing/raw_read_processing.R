@@ -27,6 +27,7 @@ raw_read_setup(
   output_path = 'sequencing/data/output',
   progress_path = 'sequencing/data/progress',
   ref_fasta = 'sequencing/data/ref_trainsets/rdp_train_set_16.fa',
+  ref_fasta_spp = 'sequencing/data/ref_trainsets/rdp_species_assignment_16.fa',
   meta_data = 'sequencing/data/metadata.csv',
   fwd_error = NULL,
   rev_error = NULL,
@@ -104,7 +105,7 @@ if(length(grep('fwd_error', ls())) == 0){
                            multithread = TRUE,
                            randomize = TRUE,
                            MAX_CONSIST = 30)
-  errF <- dd_learnF$err_out
+  
   cat(paste('\nForward error rates completed at', Sys.time()), file = progress_file, append = TRUE)
   cat(paste('\nForward error rate:', dada2:::checkConvergence(dd_learnF), sep = ' '), file = progress_file, append = TRUE)
   # Learn reverse error rates
@@ -112,18 +113,9 @@ if(length(grep('fwd_error', ls())) == 0){
                            multithread = TRUE,
                            randomize = TRUE,
                            MAX_CONSIST = 30)
-  errR <- dd_learnR$err_out
+  
   cat(paste('\nReverse error rates completed at', Sys.time()), file = progress_file, append = TRUE)
   cat(paste('\nReverse error rates:', dada2:::checkConvergence(dd_learnR), sep = ' '), file = progress_file, append = TRUE)
-  
-  dev.off()
-  # plot error rates ####
-  pdf(paste(plot_path, '/', time, 'error_rates.pdf', sep = ''))
-  plotErrors(dd_learnF) +
-    ggtitle('Forward error rates')
-  plotErrors(dd_learnR) +
-    ggtitle('Reverse error rates')
-  dev.off()
   
   # save out error rates
   saveRDS(dd_learnF, paste(output_path, '/', time, 'fwd_error.rds', sep = ''))
@@ -139,9 +131,9 @@ names(derepRs) <- sample.names
 cat(paste('\nDereplicated forward and reverse files', Sys.time()), file = progress_file, append = TRUE)
 
 # infer sequence data ####
-dadaFs <- dada(derepFs, err = errF, pool = TRUE, multithread = TRUE)
+dadaFs <- dada(derepFs, err = dd_learnF, pool = TRUE, multithread = TRUE)
 cat(paste('\nForward sequences inferred', Sys.time()), file = progress_file, append = TRUE)
-dadaRs <- dada(derepRs, err = errR, pool = TRUE, multithread = TRUE)
+dadaRs <- dada(derepRs, err = dd_learnR, pool = TRUE, multithread = TRUE)
 cat(paste('\nReverse sequences inferred', Sys.time()), file = progress_file, append = TRUE)
 
 # save out the dada class objects
@@ -171,6 +163,7 @@ saveRDS(track, paste(output_path, '/', time, 'track_reads_through_stages.rds', s
 
 # assign taxonomy ####
 taxtab <- assignTaxonomy(seqtab, refFasta = ref_fasta)
+if(!is.null(ref_fasta_spp)){taxtab <- addSpecies(taxtab, refFasta = ref_fasta_spp)}
 colnames(taxtab) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
 cat(paste('\nTaxonomy assigned', Sys.time()), file = progress_file, append = TRUE)
 
@@ -192,12 +185,12 @@ cat(paste('\nConstructed phylogenetic tree', Sys.time()), file = progress_file, 
 
 # save files
 saveRDS(taxtab, paste(output_path, '/', time, 'taxtab.rds', sep = ''))
-saveRDS(taxtab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
-saveRDS(taxtab, paste(output_path, '/', time, 'phytree.rds', sep = ''))
+saveRDS(seq_tab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
+saveRDS(phang_align, paste(output_path, '/', time, 'phytree.rds', sep = ''))
 # files saved
 
 # subset meta for just the samples present
-meta <- filter(meta, SampleID %in% sample.names)
+meta <- filter(meta, SampleID %in% sample_namesF)
 rownames(meta) <- meta$SampleID
 ps <- phyloseq(tax_table(taxtab), 
                sample_data(meta),
@@ -210,9 +203,15 @@ save(ps, file = paste(output_path, '/', time, 'ps.Rdata', sep = ''))
 
 cat(paste('\nEnd of raw read processing', Sys.time()), file = progress_file, append = TRUE)
 
+# plot error rates ####
+pdf(paste(plot_path, '/', time, 'error_rates.pdf', sep = ''))
+plotErrors(dd_learnF) +
+  ggtitle('Forward error rates')
+plotErrors(dd_learnR) +
+  ggtitle('Reverse error rates')
+dev.off()
+
 # End time
 end_time <- Sys.time()
 
 cat(paste('\nThis run took:', difftime(end_time, start_time, unit = 'hours'), 'hours', sep = ' '), file = progress_file, append = TRUE)
-
-rm(list = setdiff(ls(), c("ps", 'taxtab', 'meta', 'seqtab', 'fitGTR')))

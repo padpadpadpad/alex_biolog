@@ -1,6 +1,10 @@
-# raw read Big Data ####
+# raw processing ####
 
-# setup ####
+# uses the dada2 and phyloseq pipeline presented here:
+# https://f1000research.com/articles/5-1492/v2 
+# Bioconductor workflow for Microbiome data analysis: from raw reads to community analysis
+
+# clean workspace before starting ####
 rm(list = ls())
 
 # set seed ####
@@ -9,126 +13,158 @@ set.seed(42)
 # start time
 start_time <- Sys.time()
 
-# load source script with additional functions
-source('DNA/scripts/Extra_Functions.R')
+# load source script with additional functions ####
+source('sequencing/scripts/Extra_Functions.R')
 
-# setup paths and packages
+# setup paths and packages and error if previously estimated ####
+# this will automatically create a progress file each time it is run in the progress path
+# will create relevant folders if they are not there - raw_path needs to be present as it has the data
 raw_read_setup(
   packages = c('ggplot2', 'gridExtra', 'dada2', 'phyloseq', 'DECIPHER', 'tidyr', 'dplyr'),
-  raw_path = 'DNA/data/Trimmed',
-  filt_path = 'DNA/data/Filtered',
-  plot_path = 'DNA/plots',
-  output_path = 'DNA/data/output',
-  progress_path = 'DNA/data/progress',
-  ref_fasta = "DNA/data/train_sets/clustering/final_combine/ref_db_final.fasta",
-  meta_data = "DNA/data/pond_transplant_DNA_metadata.csv",
-  fwd_error = "DNA/data/error/20161210_14:26_errorF.rds",
-  rev_error = "DNA/data/error/20161210_14:26_errorR.rds",
-  run_filter = 'N'
+  raw_path = 'sequencing/data/raw_data',
+  filt_path = 'sequencing/data/Filtered',
+  plot_path = 'sequencing/plots',
+  output_path = 'sequencing/data/output',
+  progress_path = 'sequencing/data/progress',
+  ref_fasta = 'sequencing/data/ref_trainsets/rdp_train_set_16.fa',
+  ref_fasta_spp = 'sequencing/data/ref_trainsets/rdp_species_assignment_16.fa',
+  meta_data = 'sequencing/data/metadata.csv',
+  fwd_error = NULL,
+  rev_error = NULL,
+  run_filter = 'Y'
 )
 
+# create folder for output
+dir.create(file.path(output_path, substr(time, 1, nchar(time) - 1)))
+output_path <- file.path(output_path, substr(time, 1, nchar(time) - 1))
+
+# list files ####
 fns <- sort(list.files(raw_path, pattern = 'fast', full.names = TRUE, recursive = T))
+
 # sort files for forward and reverse sequences ####
 fnFs <- fns[grepl("R1", fns)]
 fnRs <- fns[grepl("R2", fns)]
 
+# for test pick the first 15 of each of these
+#fnFs <- fnFs[1:5]
+#fnRs <- fnRs[1:5]
+
+# check quality of data ####
+plot_qual(file.path(plot_path, 'qual_plot_preFilt_test.pdf'), fnFs, fnRs, height = 5, width = 7)
+
 # run filter parameters ####
+# this can be based on the quality profiles in qual_plot_preFilt.pdf
 if(run_filter == 'Y'){
   
-  # check quality of data ####
-  # subsample <- sample(length(fnFs), 3)
-  if(!file.exists(file.path(plot_path, 'qual_plot_preFilt.pdf'))){
-    plot_qual(file.path(plot_path, 'qual_plot_preFilt.pdf'), fnFs, fnRs, height = 5, width = 7)
-  }
-  
   # Trim and filter ####
-  # create filter path if it is not present
-  if(!file_test("-d", filt_path)) dir.create(filt_path) 
   filtFs <- file.path(filt_path, basename(fnFs)) 
   filtRs <- file.path(filt_path, basename(fnRs))
   
   # set trimming parameters ####
-  for(i in seq_along(fnFs)) {
-    fastqPairedFilter(c(fnFs[[i]], fnRs[[i]]), 
-                      c(filtFs[[i]], filtRs[[i]]),
-                      trimLeft=0, truncLen=c(250, 250),
-                      maxN=0, maxEE=2, truncQ=2,
-                      compress=TRUE)
-  }
+  out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
+                       trimLeft=0, truncLen=c(250, 250),
+                       maxN=0, maxEE=2, truncQ=2,
+                       compress=TRUE,
+                       multithread = TRUE)
   
-  plot_qual(file.path(plot_path, 'qual_plot_postFilt.pdf'), filtFs, filtRs, height = 5, width = 7)
+  # plot quality post filtering
+  plot_qual(file.path(plot_path, 'qual_plot_postFilt_test.pdf'), filtFs, filtRs, height = 5, width = 7)
   
+  # add update to progress file
   cat(paste('\nFiltering completed at ', format(Sys.time(), '%Y-%m-%d %H:%m')), file = progress_file, append = TRUE)
   
 }
 
-# get filt path
+# check how many reads made it through the filtering step
+head(out)
+
+# get filt path ####
 filtFs <- file.path(filt_path, basename(fnFs))
 filtRs <- file.path(filt_path, basename(fnRs))
 
 # name the objects in the list
-sample.names <- sapply(strsplit(basename(filtFs), "_"), `[`, 1)
-names(filtFs) <- sample.names
-names(filtRs) <- sample.names
+# this will be run specific
+sample_namesF <- paste('sample', gsub('_.*', '', basename(filtFs)), sep = '_')
+sample_namesR <- paste('sample', gsub('_.*', '', basename(filtRs)), sep = '_')
 
+# check Fwd and Rev files are in the same order
+if(!identical(sample.names, sample.namesR)) stop("Forward and reverse files do not match.")
+
+# name files
+names(filtFs) <- sample_namesF
+names(filtRs) <- sample_namesR
+
+# learn error rates ####
+# if this has been done before, assign error rates
 if(length(grep('fwd_error', ls())) == 1){
   errF <- fwd_error
   errR <- rev_error
 }
 
+# if this has not been done before, infer error rates
 if(length(grep('fwd_error', ls())) == 0){
   
   # learn error rates ####
   # learn forward error rates
-  NSAM.LEARN <- 10 # Choose enough samples to have at least 1M reads
-  drp.learnF <- derepFastq(sample(filtFs, NSAM.LEARN))
-  dd.learnF <- dada(drp.learnF, err=NULL, selfConsist=TRUE, multithread=TRUE)
-  errF <- dd.learnF[[1]]$err_out
+  dd_learnF <- learnErrors(filtFs, 
+                           multithread = TRUE,
+                           randomize = TRUE,
+                           MAX_CONSIST = 5)
+
   cat(paste('\nForward error rates completed at', Sys.time()), file = progress_file, append = TRUE)
-  cat(paste('\nForward error rate:', dada2:::checkConvergence(dd.learnF[[1]]), sep = ' '), file = progress_file, append = TRUE)
+  cat(paste('\nForward error rate:', dada2:::checkConvergence(dd_learnF), sep = ' '), file = progress_file, append = TRUE)
   # Learn reverse error rates
-  drp.learnR <- derepFastq(sample(filtRs, NSAM.LEARN))
-  dd.learnR <- dada(drp.learnR, err=NULL, selfConsist=TRUE, multithread=TRUE)
-  errR <- dd.learnR[[1]]$err_out
+  dd_learnR <- learnErrors(filtRs, 
+                           multithread = TRUE,
+                           randomize = TRUE,
+                           MAX_CONSIST = 5)
+
   cat(paste('\nReverse error rates completed at', Sys.time()), file = progress_file, append = TRUE)
-  cat(paste('\nReverse error rates:', dada2:::checkConvergence(dd.learnR[[1]]), sep = ' '), file = progress_file, append = TRUE)
-
-  # plot error rates ####
-  pdf(paste(plot_path, '/', time, 'error_rates.pdf', sep = ''))
-  plotErrors(dd.learnF)
-  plotErrors(dd.learnR)
-  dev.off()
-
-  rm(drp.learnF);rm(dd.learnF)
-  rm(drp.learnR);rm(dd.learnR)
+  cat(paste('\nReverse error rates:', dada2:::checkConvergence(dd_learnR), sep = ' '), file = progress_file, append = TRUE)
+  
+  # save out error rates
+  saveRDS(dd_learnF, paste(output_path, '/', time, 'fwd_error.rds', sep = ''))
+  saveRDS(dd_learnR, paste(output_path, '/', time, 'rev_error.rds', sep = ''))
 }
 
+# big data, file by file inference
+# Sample inference and merger of paired-end reads
+# create an empty list
+mergers <- vector("list", length(sample_namesF))
+# name the list
+names(mergers) <- sample_namesF
 
-# Sample inference and merger of paired-end reads ####
-mergers <- vector("list", length(sample.names))
-names(mergers) <- sample.names
-for(i in 1:length(sample.names)) {
-  cat(paste("\nProcessing:",  i, 'of', length(sample.names), ':', sample.names[i], Sys.time(), sep = ' '), file = progress_file, append = TRUE)
-  derepF <- derepFastq(filtFs[[sample.names[i]]])
-  ddF <- dada(derepF, err=errF, multithread=TRUE)
-  derepR <- derepFastq(filtRs[[sample.names[i]]])
-  ddR <- dada(derepR, err=errR, multithread=TRUE)
+# run loop
+for(i in 1:length(sample_namesF)) {
+  cat(paste("\nProcessing:",  i, 'of', length(sample_namesF), ':', sample_namesF[i], Sys.time(), sep = ' '), file = progress_file, append = TRUE)
+  derepF <- derepFastq(filtFs[[sample_namesF[i]]])
+  ddF <- dada(derepF, err=dd_learnF, multithread=TRUE, verbose = 0)
+  derepR <- derepFastq(filtRs[[sample_namesF[i]]])
+  ddR <- dada(derepR, err=dd_learnR, multithread=TRUE, verbose = 0)
   merger <- mergePairs(ddF, derepF, ddR, derepR)
-  mergers[[sample.names[i]]] <- merger
+  mergers[[sample_namesF[i]]] <- merger
 }
-
-rm(derepF); rm(derepR)
 
 # construct sequence table ####
-seqtab.all <- makeSequenceTable(mergers)
+seqtab_all <- makeSequenceTable(mergers)
 cat(paste('\nSequence table constructed', Sys.time()), file = progress_file, append = TRUE)
 
 # remove chimeric sequences ####
-seqtab <- removeBimeraDenovo(seqtab.all)
+seqtab <- removeBimeraDenovo(seqtab_all)
 cat(paste('\nChimeric sequences removed', Sys.time()), file = progress_file, append = TRUE)
+
+# track reads through pipeline
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(mergers, getN), rowSums(seqtab_all), rowSums(seqtab))
+colnames(track) <- c("input", "filtered", "denoised_and_merged", "tabled", "nonchim")
+rownames(track) <- sample_namesF
+head(track)
+
+saveRDS(track, paste(output_path, '/', time, 'track_reads_through_stages.rds', sep = ''))
 
 # assign taxonomy ####
 taxtab <- assignTaxonomy(seqtab, refFasta = ref_fasta)
+if(!is.null(ref_fasta_spp)){taxtab <- addSpecies(taxtab, refFasta = ref_fasta_spp)}
 colnames(taxtab) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
 cat(paste('\nTaxonomy assigned', Sys.time()), file = progress_file, append = TRUE)
 
@@ -139,22 +175,23 @@ alignment <- AlignSeqs(DNAStringSet(seqs), anchor = NA)
 cat(paste('\nSequences aligned', Sys.time()), file = progress_file, append = TRUE)
 
 # construct phylogenetic tree using phangorn ####
-phang.align <- phangorn::phyDat(as(alignment, "matrix"), type="DNA") 
-dm <- phangorn::dist.ml(phang.align)
+phang_align <- phangorn::phyDat(as(alignment, "matrix"), type="DNA") 
+dm <- phangorn::dist.ml(phang_align)
 treeNJ <- phangorn::NJ(dm) # Note, tip order != sequence order
-fit <-  phangorn::pml(treeNJ, data=phang.align)
+fit <-  phangorn::pml(treeNJ, data = phang_align)
 fitGTR <- update(fit, k=4, inv=0.2)
 fitGTR <- phangorn::optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
                               rearrangement = "stochastic", control = phangorn::pml.control(trace = 0))
 cat(paste('\nConstructed phylogenetic tree', Sys.time()), file = progress_file, append = TRUE)
 
 # save files
-if(!file_test("-d", file.path(output_path, substr(time, 1, nchar(time) - 1)))) dir.create(file.path(output_path, substr(time, 1, nchar(time) - 1)))
-output_path <- file.path(output_path, substr(time, 1, nchar(time) - 1))
 saveRDS(taxtab, paste(output_path, '/', time, 'taxtab.rds', sep = ''))
-saveRDS(taxtab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
-saveRDS(taxtab, paste(output_path, '/', time, 'phytree.rds', sep = ''))
+saveRDS(seq_tab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
+saveRDS(phang_align, paste(output_path, '/', time, 'phytree.rds', sep = ''))
 # files saved
+
+# subset meta for just the samples present
+meta <- filter(meta, SampleID %in% sample_namesF)
 rownames(meta) <- meta$SampleID
 ps <- phyloseq(tax_table(taxtab), 
                sample_data(meta),
@@ -167,11 +204,15 @@ save(ps, file = paste(output_path, '/', time, 'ps.Rdata', sep = ''))
 
 cat(paste('\nEnd of raw read processing', Sys.time()), file = progress_file, append = TRUE)
 
+# plot error rates ####
+pdf(paste(plot_path, '/', time, 'error_rates.pdf', sep = ''))
+plotErrors(dd_learnF) +
+  ggtitle('Forward error rates')
+plotErrors(dd_learnR) +
+  ggtitle('Reverse error rates')
+dev.off()
+
 # End time
 end_time <- Sys.time()
 
 cat(paste('\nThis run took:', difftime(end_time, start_time, unit = 'hours'), 'hours', sep = ' '), file = progress_file, append = TRUE)
-
-rm(list = setdiff(ls(), c("ps", 'taxtab', 'meta', 'seqtab', 'fitGTR')))
-
-
