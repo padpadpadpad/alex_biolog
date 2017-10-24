@@ -109,7 +109,7 @@ if(length(grep('fwd_error', ls())) == 0){
   dd_learnF <- learnErrors(filtFs, 
                            multithread = TRUE,
                            randomize = TRUE,
-                           MAX_CONSIST = 5)
+                           MAX_CONSIST = 30)
 
   cat(paste('\nForward error rates completed at', Sys.time()), file = progress_file, append = TRUE)
   cat(paste('\nForward error rate:', dada2:::checkConvergence(dd_learnF), sep = ' '), file = progress_file, append = TRUE)
@@ -117,7 +117,7 @@ if(length(grep('fwd_error', ls())) == 0){
   dd_learnR <- learnErrors(filtRs, 
                            multithread = TRUE,
                            randomize = TRUE,
-                           MAX_CONSIST = 5)
+                           MAX_CONSIST = 30)
 
   cat(paste('\nReverse error rates completed at', Sys.time()), file = progress_file, append = TRUE)
   cat(paste('\nReverse error rates:', dada2:::checkConvergence(dd_learnR), sep = ' '), file = progress_file, append = TRUE)
@@ -164,9 +164,45 @@ saveRDS(track, paste(output_path, '/', time, 'track_reads_through_stages.rds', s
 
 # assign taxonomy ####
 taxtab <- assignTaxonomy(seqtab, refFasta = ref_fasta)
-if(!is.null(ref_fasta_spp)){taxtab <- addSpecies(taxtab, refFasta = ref_fasta_spp)}
-colnames(taxtab) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
 cat(paste('\nTaxonomy assigned', Sys.time()), file = progress_file, append = TRUE)
+if(!is.null(ref_fasta_spp)){
+  cat(paste('\nAssigning species at', Sys.time(), '\n'), file = progress_file, append = TRUE)
+  spp_assign <- capture.output(taxtab <- addSpecies(taxtab, refFasta = ref_fasta_spp, verbose = TRUE))
+  cat(spp_assign, file = progress_file, append = TRUE)
+  cat(paste('\nSpecies assigned', Sys.time()), file = progress_file, append = TRUE)
+  }
+colnames(taxtab) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+
+# save files
+saveRDS(taxtab, paste(output_path, '/', time, 'taxtab.rds', sep = ''))
+saveRDS(seqtab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
+
+# subset meta for just the samples present
+meta <- filter(meta, SampleID %in% sample_namesF)
+rownames(meta) <- meta$SampleID
+ps <- phyloseq(tax_table(taxtab), 
+               sample_data(meta),
+               otu_table(seqtab, taxa_are_rows = FALSE))
+
+# save a phyloseq object without the phylogeny
+saveRDS(ps, paste(output_path, '/', time, 'ps.rds', sep = ''))
+save(ps, file = paste(output_path, '/', time, 'ps.Rdata', sep = ''))
+
+# plot error rates ####
+pdf(paste(plot_path, '/', time, 'error_rates.pdf', sep = ''))
+plotErrors(dd_learnF) +
+  ggtitle('Forward error rates')
+plotErrors(dd_learnR) +
+  ggtitle('Reverse error rates')
+dev.off()
+
+cat(paste('\nEnd of raw read processing without construction of phylogeny', Sys.time()), file = progress_file, append = TRUE)
+
+# End time
+end_time <- Sys.time()
+
+cat(paste('\nThis run (without phylogeny estimation) took:', difftime(end_time, start_time, unit = 'hours'), 'hours', sep = ' '), file = progress_file, append = TRUE)
 
 # multiple alignment ####
 seqs <- getSequences(seqtab)
@@ -184,9 +220,7 @@ fitGTR <- phangorn::optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
                               rearrangement = "stochastic", control = phangorn::pml.control(trace = 0))
 cat(paste('\nConstructed phylogenetic tree', Sys.time()), file = progress_file, append = TRUE)
 
-# save files
-saveRDS(taxtab, paste(output_path, '/', time, 'taxtab.rds', sep = ''))
-saveRDS(seq_tab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
+
 saveRDS(phang_align, paste(output_path, '/', time, 'phytree.rds', sep = ''))
 # files saved
 
@@ -203,14 +237,6 @@ saveRDS(ps, paste(output_path, '/', time, 'ps.rds', sep = ''))
 save(ps, file = paste(output_path, '/', time, 'ps.Rdata', sep = ''))
 
 cat(paste('\nEnd of raw read processing', Sys.time()), file = progress_file, append = TRUE)
-
-# plot error rates ####
-pdf(paste(plot_path, '/', time, 'error_rates.pdf', sep = ''))
-plotErrors(dd_learnF) +
-  ggtitle('Forward error rates')
-plotErrors(dd_learnR) +
-  ggtitle('Reverse error rates')
-dev.off()
 
 # End time
 end_time <- Sys.time()

@@ -1,1 +1,9 @@
 Run started at  2017-10-23 14:23:15
+
+Filtering completed at  2017-10-23 15:10
+Forward error rates completed at 2017-10-23 15:17:14
+Forward error rate: 64.7430109851611 
+Forward error rate: 9.28071467845501 
+Forward error rate: 0.859920184423565 
+Forward error rate: 0.0956169403488156 
+Forward error rate: 0.026766718478696

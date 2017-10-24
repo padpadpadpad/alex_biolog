@@ -185,7 +185,7 @@ cat(paste('\nConstructed phylogenetic tree', Sys.time()), file = progress_file, 
 
 # save files
 saveRDS(taxtab, paste(output_path, '/', time, 'taxtab.rds', sep = ''))
-saveRDS(seq_tab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
+saveRDS(seqtab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
 saveRDS(phang_align, paste(output_path, '/', time, 'phytree.rds', sep = ''))
 # files saved
 

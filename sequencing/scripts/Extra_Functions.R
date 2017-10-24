@@ -28,7 +28,7 @@ raw_read_setup <- function(packages, raw_path, filt_path, plot_path = NULL, outp
   if(!is.null(rev_error)){assign('rev_error', readRDS(rev_error), envir = globalenv())}
   if(!is.null(output_path)) assign('output_path', output_path, envir = globalenv())
   if(!is.null(ref_fasta)) assign('ref_fasta', ref_fasta, envir = globalenv())
-  if(!is.null(ref_fasta_spp)) assign('ref_fasta_spp', ref_fasta, envir = globalenv())
+  if(!is.null(ref_fasta_spp)) assign('ref_fasta_spp', ref_fasta_spp, envir = globalenv())
   
   if(!is.null(progress_path)) {assign('time', format(Sys.time(), '%Y%m%d_%H:%M_'), envir = globalenv())
   file.create(paste(progress_path, '/', time, 'progress.txt', sep = ''))
