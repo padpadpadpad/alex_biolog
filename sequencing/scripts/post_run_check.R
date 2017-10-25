@@ -7,10 +7,12 @@ library(phyloseq)
 rm(list - ls())
 
 # set working directory to output folder of the run
-setwd('sequencing/data/output/20171023_15:21')
+setwd('sequencing/data/output/20171024_17:18')
+
+date <- '20171024_17:18'
 
 # load in tracking of reads
-tracking <- readRDS('20171023_15:21_track_reads_through_stages.rds')
+tracking <- readRDS('20171024_17:18_track_reads_through_stages.rds')
 samps <- row.names(tracking)
 tracking <- data.frame(tracking) %>%
   mutate(samps = samps) %>%
@@ -34,9 +36,9 @@ track_ave <- group_by(tracking, stage) %>%
   arrange(., desc(mean))
 
 # average proportion of reads kept
-min(track_ave$mean)/max(track_ave$mean)
+min(track_ave$mean)/max(track_ave$mean) # much better
 
-# This might seem a little low - I would need to read around if this is bad or not
+ggsave('../../../plots/20171024_17:18/reads_through_stages.pdf')
 
 # lets plot a simple graph
 

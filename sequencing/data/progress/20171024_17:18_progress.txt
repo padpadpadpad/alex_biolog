@@ -1,0 +1,141 @@
+Run started at  2017-10-24 17:18:38
+
+Filtering completed at  2017-10-24 17:10
+Forward error rates completed at 2017-10-24 18:21:48
+Forward error rate: 68.1841563886758 
+Forward error rate: 1.05958782399118 
+Forward error rate: 0.0380610512507008 
+Forward error rate: 0.00404671923473879 
+Forward error rate: 0.00200982490648993 
+Forward error rate: 2.15682633462043e-05 
+Forward error rate: 0.00169454873699805 
+Forward error rate: 1.05473773705865e-05 
+Forward error rate: 0.00169320466414647 
+Forward error rate: 0 
+Forward error rate: 0.00169321817311714
+Reverse error rates completed at 2017-10-24 19:05:47
+Reverse error rates: 67.0701552624471 
+Reverse error rates: 1.24671811865542 
+Reverse error rates: 0.0456296943863134 
+Reverse error rates: 0.00961824685491692 
+Reverse error rates: 0.00338334846077686 
+Reverse error rates: 0.000855765425936235 
+Reverse error rates: 0.000683495017242897 
+Reverse error rates: 0 
+Reverse error rates: 0.000709944328209957 
+Reverse error rates: 6.35313558457116e-05 
+Reverse error rates: 0.000682684125245808
+Processing: 1 of 102 : sample_1 2017-10-24 19:05:47
+Processing: 2 of 102 : sample_10 2017-10-24 19:06:14
+Processing: 3 of 102 : sample_100 2017-10-24 19:06:53
+Processing: 4 of 102 : sample_101 2017-10-24 19:07:24
+Processing: 5 of 102 : sample_102 2017-10-24 19:07:48
+Processing: 6 of 102 : sample_11 2017-10-24 19:08:30
+Processing: 7 of 102 : sample_12 2017-10-24 19:08:50
+Processing: 8 of 102 : sample_13 2017-10-24 19:09:05
+Processing: 9 of 102 : sample_14 2017-10-24 19:09:20
+Processing: 10 of 102 : sample_15 2017-10-24 19:09:44
+Processing: 11 of 102 : sample_16 2017-10-24 19:10:10
+Processing: 12 of 102 : sample_17 2017-10-24 19:10:32
+Processing: 13 of 102 : sample_18 2017-10-24 19:11:07
+Processing: 14 of 102 : sample_19 2017-10-24 19:12:17
+Processing: 15 of 102 : sample_2 2017-10-24 19:13:01
+Processing: 16 of 102 : sample_20 2017-10-24 19:13:30
+Processing: 17 of 102 : sample_21 2017-10-24 19:14:42
+Processing: 18 of 102 : sample_22 2017-10-24 19:15:31
+Processing: 19 of 102 : sample_23 2017-10-24 19:16:28
+Processing: 20 of 102 : sample_24 2017-10-24 19:17:10
+Processing: 21 of 102 : sample_25 2017-10-24 19:18:48
+Processing: 22 of 102 : sample_26 2017-10-24 19:19:46
+Processing: 23 of 102 : sample_27 2017-10-24 19:20:44
+Processing: 24 of 102 : sample_28 2017-10-24 19:21:21
+Processing: 25 of 102 : sample_29 2017-10-24 19:22:32
+Processing: 26 of 102 : sample_3 2017-10-24 19:23:05
+Processing: 27 of 102 : sample_30 2017-10-24 19:23:26
+Processing: 28 of 102 : sample_31 2017-10-24 19:25:30
+Processing: 29 of 102 : sample_32 2017-10-24 19:26:51
+Processing: 30 of 102 : sample_33 2017-10-24 19:27:52
+Processing: 31 of 102 : sample_34 2017-10-24 19:29:02
+Processing: 32 of 102 : sample_35 2017-10-24 19:30:22
+Processing: 33 of 102 : sample_36 2017-10-24 19:32:02
+Processing: 34 of 102 : sample_37 2017-10-24 19:33:09
+Processing: 35 of 102 : sample_38 2017-10-24 19:34:02
+Processing: 36 of 102 : sample_39 2017-10-24 19:34:52
+Processing: 37 of 102 : sample_4 2017-10-24 19:36:37
+Processing: 38 of 102 : sample_40 2017-10-24 19:37:29
+Processing: 39 of 102 : sample_41 2017-10-24 19:39:01
+Processing: 40 of 102 : sample_42 2017-10-24 19:39:37
+Processing: 41 of 102 : sample_43 2017-10-24 19:40:24
+Processing: 42 of 102 : sample_44 2017-10-24 19:41:06
+Processing: 43 of 102 : sample_45 2017-10-24 19:42:05
+Processing: 44 of 102 : sample_46 2017-10-24 19:42:56
+Processing: 45 of 102 : sample_47 2017-10-24 19:43:38
+Processing: 46 of 102 : sample_48 2017-10-24 19:44:15
+Processing: 47 of 102 : sample_49 2017-10-24 19:45:17
+Processing: 48 of 102 : sample_5 2017-10-24 19:46:59
+Processing: 49 of 102 : sample_50 2017-10-24 19:47:53
+Processing: 50 of 102 : sample_51 2017-10-24 19:49:23
+Processing: 51 of 102 : sample_52 2017-10-24 19:50:20
+Processing: 52 of 102 : sample_53 2017-10-24 19:51:30
+Processing: 53 of 102 : sample_54 2017-10-24 19:52:17
+Processing: 54 of 102 : sample_55 2017-10-24 19:53:24
+Processing: 55 of 102 : sample_56 2017-10-24 19:55:04
+Processing: 56 of 102 : sample_57 2017-10-24 19:56:15
+Processing: 57 of 102 : sample_58 2017-10-24 19:57:24
+Processing: 58 of 102 : sample_59 2017-10-24 19:57:48
+Processing: 59 of 102 : sample_6 2017-10-24 19:58:31
+Processing: 60 of 102 : sample_60 2017-10-24 19:59:07
+Processing: 61 of 102 : sample_61 2017-10-24 19:59:58
+Processing: 62 of 102 : sample_62 2017-10-24 20:00:58
+Processing: 63 of 102 : sample_63 2017-10-24 20:01:35
+Processing: 64 of 102 : sample_64 2017-10-24 20:02:37
+Processing: 65 of 102 : sample_65 2017-10-24 20:04:01
+Processing: 66 of 102 : sample_66 2017-10-24 20:04:33
+Processing: 67 of 102 : sample_67 2017-10-24 20:05:00
+Processing: 68 of 102 : sample_68 2017-10-24 20:05:29
+Processing: 69 of 102 : sample_69 2017-10-24 20:05:50
+Processing: 70 of 102 : sample_7 2017-10-24 20:06:08
+Processing: 71 of 102 : sample_70 2017-10-24 20:06:28
+Processing: 72 of 102 : sample_71 2017-10-24 20:07:04
+Processing: 73 of 102 : sample_72 2017-10-24 20:07:41
+Processing: 74 of 102 : sample_73 2017-10-24 20:08:10
+Processing: 75 of 102 : sample_74 2017-10-24 20:08:44
+Processing: 76 of 102 : sample_75 2017-10-24 20:09:36
+Processing: 77 of 102 : sample_76 2017-10-24 20:10:11
+Processing: 78 of 102 : sample_77 2017-10-24 20:10:59
+Processing: 79 of 102 : sample_78 2017-10-24 20:11:49
+Processing: 80 of 102 : sample_79 2017-10-24 20:12:29
+Processing: 81 of 102 : sample_8 2017-10-24 20:13:04
+Processing: 82 of 102 : sample_80 2017-10-24 20:13:50
+Processing: 83 of 102 : sample_81 2017-10-24 20:14:26
+Processing: 84 of 102 : sample_82 2017-10-24 20:15:40
+Processing: 85 of 102 : sample_83 2017-10-24 20:16:09
+Processing: 86 of 102 : sample_84 2017-10-24 20:17:22
+Processing: 87 of 102 : sample_85 2017-10-24 20:18:23
+Processing: 88 of 102 : sample_86 2017-10-24 20:18:41
+Processing: 89 of 102 : sample_87 2017-10-24 20:18:52
+Processing: 90 of 102 : sample_88 2017-10-24 20:19:52
+Processing: 91 of 102 : sample_89 2017-10-24 20:20:20
+Processing: 92 of 102 : sample_9 2017-10-24 20:20:44
+Processing: 93 of 102 : sample_90 2017-10-24 20:21:21
+Processing: 94 of 102 : sample_91 2017-10-24 20:21:38
+Processing: 95 of 102 : sample_92 2017-10-24 20:22:06
+Processing: 96 of 102 : sample_93 2017-10-24 20:22:40
+Processing: 97 of 102 : sample_94 2017-10-24 20:23:25
+Processing: 98 of 102 : sample_95 2017-10-24 20:23:47
+Processing: 99 of 102 : sample_96 2017-10-24 20:24:44
+Processing: 100 of 102 : sample_97 2017-10-24 20:24:58
+Processing: 101 of 102 : sample_98 2017-10-24 20:25:31
+Processing: 102 of 102 : sample_99 2017-10-24 20:26:38
+Sequence table constructed 2017-10-24 20:27:17
+Chimeric sequences removed 2017-10-24 20:29:14
+Taxonomy assigned 2017-10-24 20:39:41
+Assigning species at 2017-10-24 20:39:41 
+221 out of 5521 were assigned to the species level. Of which 197 had genera consistent with the input table.
+Species assigned 2017-10-24 20:43:00
+End of raw read processing without construction of phylogeny 2017-10-24 20:43:04
+This run (without phylogeny estimation) took: 3.40719121310446 hours
+Sequences aligned 2017-10-24 20:58:37
+Constructed phylogenetic tree 2017-10-25 07:21:52
+End of raw read processing 2017-10-25 07:21:53
+This run took: 14.0541278980838 hours

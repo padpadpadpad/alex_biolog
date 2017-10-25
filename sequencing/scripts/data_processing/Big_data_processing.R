@@ -62,7 +62,7 @@ if(run_filter == 'Y'){
   
   # set trimming parameters ####
   out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
-                       trimLeft=0, truncLen=c(250, 250),
+                       trimLeft=25, truncLen=c(250, 250),
                        maxN=0, maxEE=2, truncQ=2,
                        compress=TRUE,
                        multithread = TRUE)
@@ -179,6 +179,8 @@ saveRDS(taxtab, paste(output_path, '/', time, 'taxtab.rds', sep = ''))
 saveRDS(seqtab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
 
 # subset meta for just the samples present
+
+# SampleID needs to match sample_namesF
 meta <- filter(meta, SampleID %in% sample_namesF)
 rownames(meta) <- meta$SampleID
 ps <- phyloseq(tax_table(taxtab), 
@@ -225,7 +227,6 @@ saveRDS(phang_align, paste(output_path, '/', time, 'phytree.rds', sep = ''))
 # files saved
 
 # subset meta for just the samples present
-meta <- filter(meta, SampleID %in% sample_namesF)
 rownames(meta) <- meta$SampleID
 ps <- phyloseq(tax_table(taxtab), 
                sample_data(meta),
