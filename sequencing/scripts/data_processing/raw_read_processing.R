@@ -31,7 +31,7 @@ raw_read_setup(
   meta_data = 'sequencing/data/metadata.csv',
   fwd_error = NULL,
   rev_error = NULL,
-  run_filter = 'Y'
+  run_filter = 'N'
 )
 
 # create folder for output
@@ -49,14 +49,14 @@ fnRs <- fns[grepl("R2", fns)]
 #fnFs <- fnFs[1:5]
 #fnRs <- fnRs[1:5]
 
-# check quality of data ####
-if(!file.exists(file.path(plot_path, 'qual_plot_preFilt_test.pdf'))){
-  plot_qual(file.path(plot_path, 'qual_plot_preFilt_test.pdf'), fnFs, fnRs, height = 5, width = 7)
-}
-
 # run filter parameters ####
 # this can be based on the quality profiles in qual_plot_preFilt.pdf
 if(run_filter == 'Y'){
+  
+  # check quality of data ####
+  if(!file.exists(file.path(plot_path, 'qual_plot_preFilt_test.pdf'))){
+    plot_qual(file.path(plot_path, 'qual_plot_preFilt_test.pdf'), fnFs, fnRs, height = 5, width = 7)
+  }
   
   # Trim and filter ####
   filtFs <- file.path(filt_path, basename(fnFs)) 

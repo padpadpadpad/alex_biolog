@@ -24,6 +24,13 @@ meta <- data.frame(id = 1:50, treatment = c(rep('comm', times = 24), rep('no_com
 # data and metadata together
 d <- merge(d, meta, by = 'id')
 
+# load in ancestral data
+d_ancest <- MicrobioUoE::bind_biolog_all('biolog/data/20170124_Ancestors_gn2biolog.xlsx', sheets = 'Sheet1') %>%
+  mutate(id = id + 50)
+meta_ancest <- data.frame(id = 51:58, treatment = 'wild_type', stringsAsFactors = FALSE)
+d_ancest <- merge(d_ancest, meta_ancest, by = 'id')
+d <- bind_rows(d, d_ancest)
+
 # which columns are substrates
 Carb_cols <- colnames(d)[grepl('X', colnames(d))]
 
@@ -49,13 +56,20 @@ d_noWT <- group_by(d_noWT, C_source) %>%
   ungroup() %>%
   merge(., WT, by = 'C_source') %>%
   mutate(., rank = dense_rank(desc(mean_OD)))
+d_stack2 <- group_by(d_stack, C_source) %>%
+  mutate(mean_OD = mean(OD_cor)) %>%
+  ungroup() %>%
+  merge(., WT, by = 'C_source') %>%
+  mutate(., rank = dense_rank(desc(mean_OD)))
+
 
 # plot performance across wells, ranked by best performance
 plot1a <- group_by(d_stack, id) %>%
 arrange(., desc(OD_cor)) %>%
   mutate(., rank = 1:96) %>%
   ggplot(.) +
-  geom_line(aes(rank, OD_cor, group = id, col = treatment), alpha = 0.75) +
+  geom_line(aes(rank, OD_cor, group = id, col = treatment), alpha = 0.25) +
+  stat_summary(aes(rank, OD_cor, col = treatment), fun.y = mean, geom = 'line', lwd = 1.25) +
   scale_color_viridis(discrete = TRUE) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
   theme(legend.position = c(0.9, 0.8)) +
@@ -66,7 +80,7 @@ arrange(., desc(OD_cor)) %>%
 
 # plot performance across well, without ranking by best performance
 plot1b <- ggplot(d_stack) +
-  geom_line(aes(C_source, OD_cor, group = id, col = treatment), alpha = 0.4) +
+  geom_line(aes(C_source, OD_cor, group = id, col = treatment), alpha = 0.25) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
   theme(legend.position = 'none') +
   ylab('optical density') +
@@ -116,18 +130,19 @@ V_E_pop <- group_by(V_E, treatment) %>%
 
 # plot genotypic and environmental variance across treatments ####
 # plot V_G and V_E ####
-V_G_plot <- ggplot(filter(V_G, treatment != 'wild_type'), aes(treatment, V_G)) +
+V_G_plot <- ggplot(V_G, aes(treatment, V_G)) +
   geom_boxplot(aes(fill = treatment, col = treatment), outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
   stat_summary(position = position_dodge(width = 0.55), geom = 'crossbar', fatten = 0, color = 'white', width = 0.4, fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x)))}) +
   geom_point(aes(treatment, V_G, col = treatment), shape = 21, fill ='white', position = position_jitter(width = 0.1)) +
   ylab('genotypic variance') +
   xlab('Treatment') +
-  scale_x_discrete(labels = c('Community', 'No Community')) +
+  scale_x_discrete(labels = c('Community', 'No Community', 'Wild Type')) +
   theme_bw() +
   theme(legend.position = 'none') +
   ggtitle(expression(Genotypic~variance~(V[G]))) +
   scale_color_viridis(discrete = TRUE) +
-  scale_fill_viridis(discrete = TRUE)
+  scale_fill_viridis(discrete = TRUE) +
+  ylim(c(0, 0.1))
 
 V_E_plot <- ggplot(V_E, aes(treatment, V_E)) +
   geom_boxplot(aes(col = treatment, fill = treatment), outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
@@ -143,10 +158,12 @@ V_E_plot <- ggplot(V_E, aes(treatment, V_E)) +
   scale_fill_viridis(discrete = TRUE)
 
 # plot
-gridExtra::grid.arrange(V_G_plot, V_E_plot, ncol = 2)
+plot2 <- gridExtra::grid.arrange(V_G_plot, V_E_plot, ncol = 2)
+
+ggsave(file.path(path_fig, 'geno_enviro_var_plot.pdf'), plot2, height = 5, width = 10)
 
 # plot all carbon sources
-ggplot(d_noWT) +
+ggplot(d_stack2) +
   geom_density_ridges2(aes(x = OD_cor, y = factor(rank), fill = treatment, col = treatment), alpha = 0.5, rel_min_height = 0.01) +
   scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
@@ -159,18 +176,18 @@ ggsave(file.path(path_fig, 'crazy_ggjoy_plot.pdf'), last_plot(), height = 12, wi
 d <- unite(d, 'id2', c(treatment, id), sep = '_', remove = FALSE)
 
 # data set ready for PCA
-d_PCA <- filter(d, id < 50) %>%
+d2 <- filter(d, id != 50 & id != 49)
+d_PCA <- d2 %>%
   select(., starts_with('X'))
-row.names(d_PCA) <- d$id2[1:49]
+row.names(d_PCA) <- d2$id2
 
 # create matrix
 Euclid_mat <- dist(d_PCA)
 
 # get variables for PCA
-d_vars <- filter(d, id < 50) %>%
-  select(., id, id2, treatment) %>%
+d_vars <- select(d2, id, id2, treatment) %>%
   mutate(., treatment = as.factor(treatment))
-row.names(d_vars) <- 
+row.names(d_vars) <- d2$id2
 PCA <- prcomp(d_PCA)
 biplot(PCA)
 
@@ -204,8 +221,8 @@ ggplot() +
   geom_path(aes(PCoA1, PCoA2, col = group), betadisper_dat$chull ) +
   geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, col = group), betadisper_lines) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
-  ylab('PCoA Axis 2 [9.6%]') +
-  xlab('PCoA Axis 1 [30.8%]') +
+  ylab('PCoA Axis 2 [10.3%]') +
+  xlab('PCoA Axis 1 [36.1%]') +
   scale_color_viridis('', discrete = TRUE) +
   #coord_fixed(sqrt(betadisper_dat$eigenvalue$percent[2]/betadisper_dat$eigenvalue$percent[1])) +
   coord_fixed() +
@@ -217,17 +234,17 @@ ggsave(file.path(path_fig, 'PCoA_across_treatments.pdf'), last_plot(), height = 
 
 
 # distance plot
-ggplot(filter(betadisper_dat$distances, group != 'wild_type'), aes(group, distances, fill = group, col = group)) +
+ggplot(betadisper_dat$distances, aes(group, distances, fill = group, col = group)) +
   geom_boxplot(outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
   stat_summary(position = position_dodge(width = 0.55), geom = 'crossbar', fatten = 0, color = 'white', width = 0.4, fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x)))}) +
   geom_point(shape = 21, fill ='white', position = position_jitterdodge(dodge.width = 0.55, jitter.width = 0.2)) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
-  scale_color_viridis('', discrete = TRUE, labels = c('Community', 'No Community')) +
-  scale_fill_viridis('', discrete = TRUE, labels = c('Community', 'No Community')) +
+  scale_color_viridis('', discrete = TRUE, labels = c('Community', 'No Community', 'Wild Type')) +
+  scale_fill_viridis('', discrete = TRUE, labels = c('Community', 'No Community', 'Wild Type')) +
   ylab('Distance to centroid') +
   theme(legend.position = c(.83, .85)) +
   xlab('') +
-  scale_x_discrete(labels = c('Community', 'No Community'))
+  scale_x_discrete(labels = c('Community', 'No Community', 'Wild Type'))
 
-mod <- lm(distances ~ group, filter(betadisper_dat$distances, group != 'wild_type'))
+mod <- lm(distances ~ group, betadisper_dat$distances)
 summary(mod)   

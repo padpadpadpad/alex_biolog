@@ -1,0 +1,24 @@
+Run started at  2017-11-03 13:27:32
+
+Forward error rates completed at 2017-11-03 13:59:41
+Forward error rate: 68.2154109631186 
+Forward error rate: 1.00339609454408 
+Forward error rate: 0.0323385140157775 
+Forward error rate: 0.00501261827266402 
+Forward error rate: 0.00296071271419542 
+Forward error rate: 0.000868570845611664 
+Forward error rate: 0
+Reverse error rates completed at 2017-11-03 14:33:44
+Reverse error rates: 66.7548778006726 
+Reverse error rates: 1.16508186858101 
+Reverse error rates: 0.0398633062619504 
+Reverse error rates: 0.00483965847209048 
+Reverse error rates: 0.00293852199444356 
+Reverse error rates: 0.00026499333620253 
+Reverse error rates: 0
+Dereplicated forward and reverse files 2017-11-03 14:38:07
+Forward sequences inferred 2017-11-03 16:57:39
+Reverse sequences inferred 2017-11-03 19:20:50
+Inferred forward and reverse sequences merged 2017-11-03 19:27:18
+Sequence table constructed 2017-11-03 19:27:19
+Chimeric sequences removed 2017-11-03 19:39:10
