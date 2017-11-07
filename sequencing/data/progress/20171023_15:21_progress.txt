@@ -1,3 +1,0 @@
-Warning message:
-closing unused connection 3 (sequencing/data/progress/20171023_15:21_progress.txt) 
-0 out of 20846 were assigned to the species level. Of which 0 had genera consistent with the input table.
