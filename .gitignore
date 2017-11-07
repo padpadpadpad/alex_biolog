@@ -6,3 +6,6 @@
 sequencing/data/raw_data/*
 sequencing/data/Filtered/*
 sequencing/data/ref_trainsets/*
+sequencing/data/output/20171103_13:27/20171103_13:27_dadaFs\.rds
+
+sequencing/data/output/20171103_13:27/20171103_13:27_dadaRs\.rds
