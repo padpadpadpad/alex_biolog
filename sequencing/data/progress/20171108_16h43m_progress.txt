@@ -1,0 +1,22 @@
+Run started at  2017-11-08 16:43:00
+
+This run is done using big_data_processing.R
+Forward error rates completed at 2017-11-08 17:14:30
+Forward error rate: 68.416613168456 
+Forward error rate: 1.10348829717567 
+Forward error rate: 0.035327778615371 
+Forward error rate: 0.00981166060907519 
+Forward error rate: 0.000714596889190076 
+Forward error rate: 0
+Processing: 1 of 102 : sample_1 2017-11-08 17:14:37
+Sequence table constructed 2017-11-08 17:14:55
+Chimeric sequences removed 2017-11-08 17:14:55
+Taxonomy assigned 2017-11-08 17:14:56
+Assigning species at 2017-11-08 17:14:56 
+
+End of raw read processing without construction of phylogeny 2017-11-08 17:14:58
+This run (without phylogeny estimation) took: 0.536227676669757 hours
+Sequences aligned 2017-11-08 17:14:58
+Constructed phylogenetic tree 2017-11-08 17:14:58
+End of raw read processing 2017-11-08 17:14:58
+This run took: 0.536240315834681 hours
