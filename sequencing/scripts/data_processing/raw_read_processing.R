@@ -1,4 +1,4 @@
-# raw processing ####
+# raw read processing ####
 
 # uses the dada2 and phyloseq pipeline presented here:
 # https://f1000research.com/articles/5-1492/v2 
@@ -13,30 +13,14 @@ set.seed(42)
 # start time
 start_time <- Sys.time()
 
-# load source script with additional functions ####
-source('sequencing/scripts/Extra_Functions.R')
-
 # setup paths and packages and error if previously estimated ####
-# this will automatically create a progress file each time it is run in the progress path
-# will create relevant folders if they are not there - raw_path needs to be present as it has the data
-raw_read_setup(
-  packages = c('ggplot2', 'gridExtra', 'dada2', 'phyloseq', 'DECIPHER', 'tidyr', 'dplyr'),
-  raw_path = 'sequencing/data/raw_data',
-  filt_path = 'sequencing/data/Filtered',
-  plot_path = 'sequencing/plots',
-  output_path = 'sequencing/data/output',
-  progress_path = 'sequencing/data/progress',
-  ref_fasta = 'sequencing/data/ref_trainsets/rdp_train_set_16.fa',
-  ref_fasta_spp = 'sequencing/data/ref_trainsets/rdp_species_assignment_16.fa',
-  meta_data = 'sequencing/data/metadata.csv',
-  fwd_error = NULL,
-  rev_error = NULL,
-  run_filter = 'N'
-)
+# this will automatically set up the environment to run the analysis
+MicrobioUoE::dada2_raw_read_setup(meta_data = 'data/metadata_example.csv')
 
-# create folder for output
-dir.create(file.path(output_path, substr(time, 1, nchar(time) - 1)))
-output_path <- file.path(output_path, substr(time, 1, nchar(time) - 1))
+# get time
+time <- paste0(basename(plot_path), '_', collapse = '')
+
+cat(paste('\nThis run is done using raw_read_processing.R'), file = progress_file, append = TRUE)
 
 # list files ####
 fns <- sort(list.files(raw_path, pattern = 'fast', full.names = TRUE, recursive = T))
@@ -45,18 +29,36 @@ fns <- sort(list.files(raw_path, pattern = 'fast', full.names = TRUE, recursive 
 fnFs <- fns[grepl("R1", fns)]
 fnRs <- fns[grepl("R2", fns)]
 
-# for test pick the first 15 of each of these
-#fnFs <- fnFs[1:5]
-#fnRs <- fnRs[1:5]
+# name the files in the list ####
+# need to be the same as in the metadata file
+sample_namesF <- paste('sample', gsub('_.*', '', basename(fnFs)), sep = '_')
+sample_namesR <- paste('sample', gsub('_.*', '', basename(fnRs)), sep = '_')
+
+# check Fwd and Rev files are in the same order
+if(!identical(sample_namesF, sample_namesR)) stop("Forward and reverse files do not match.")
+
+# check Fwd and Rev files are in the SampleID column of the meta data
+if(all(sample_namesF %in% meta$SampleID) == FALSE) stop("Forward and reverse file names are not present in metadata column SampleID")
 
 # run filter parameters ####
 # this can be based on the quality profiles in qual_plot_preFilt.pdf
 if(run_filter == 'Y'){
   
+  # create filenames
+  mast_pre_filtF <- paste0(file.path(output_path, 'fwd_master_preFilt_'), basename(plot_path), '.fastq', collapse = '')
+  mast_pre_filtR <- paste0(file.path(output_path, 'rev_master_preFilt_'), basename(plot_path), '.fastq', collapse = '')
+  
+  # create master forward and reverse files ####
+  system(paste('cat', paste(fnFs, collapse = ' '), '>', mast_pre_filtF, sep = ' '))
+  system(paste('cat', paste(fnRs, collapse = ' '), '>', mast_pre_filtR, sep = ' '))
+  
   # check quality of data ####
-  if(!file.exists(file.path(plot_path, 'qual_plot_preFilt_test.pdf'))){
-    plot_qual(file.path(plot_path, 'qual_plot_preFilt_test.pdf'), fnFs, fnRs, height = 5, width = 7)
-  }
+  pdf(file.path(plot_path, 'qual_plot_preFilt.pdf'))
+  print(plotQualityProfile(mast_pre_filtF, n = 2e6) +
+    ggtitle('Fwd reads master quality profile'))
+  print(plotQualityProfile(mast_pre_filtR, n = 2e6) +
+    ggtitle('Rev reads master quality profile'))
+  dev.off()
   
   # Trim and filter ####
   filtFs <- file.path(filt_path, basename(fnFs)) 
@@ -64,31 +66,49 @@ if(run_filter == 'Y'){
   
   # set trimming parameters ####
   out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
-                       trimLeft=0, truncLen=c(250, 250),
-                       maxN=0, maxEE=2, truncQ=2,
+                       trimLeft = 25, 
+                       truncLen=c(250, 250),
+                       maxN = 0, 
+                       maxEE = 2,
+                       truncQ = 2,
                        compress=TRUE,
                        multithread = TRUE)
   
-  # plot quality post filtering
-  plot_qual(file.path(plot_path, 'qual_plot_postFilt_test.pdf'), filtFs, filtRs, height = 5, width = 7)
+  # plot quality post filtering ####
+  mast_post_filtF <- paste0(file.path(output_path, 'fwd_master_postFilt_'), basename(plot_path), '.fastq', collapse = '')
+  mast_post_filtR <- paste0(file.path(output_path, 'rev_master_postFilt_'), basename(plot_path), '.fastq', collapse = '')
+  
+  # create master forward and reverse files
+  system(paste('cat', paste(filtFs, collapse = ' '), '>', mast_post_filtF, sep = ' '))
+  system(paste('cat', paste(filtRs, collapse = ' '), '>', mast_post_filtR, sep = ' '))
+  
+  pdf(file.path(plot_path, 'qual_plot_postFilt.pdf'))
+  print(plotQualityProfile(mast_post_filtF, n = 2e6) +
+    ggtitle('Fwd reads master quality profile'))
+  print(plotQualityProfile(mast_post_filtR, n = 2e6) +
+    ggtitle('Rev reads master quality profile'))
+  dev.off()
   
   # add update to progress file
   cat(paste('\nFiltering completed at ', format(Sys.time(), '%Y-%m-%d %H:%m')), file = progress_file, append = TRUE)
   
+  # remove some objects
+  rm(list = c('mast_pre_filtF', 'mast_post_filtF', 'mast_pre_filtR', 'mast_post_filtR'))
+  
 }
 
-# check how many reads made it through the filtering step
+# check the number of reads post filtering
 head(out)
 
 # get filt path ####
 filtFs <- file.path(filt_path, basename(fnFs))
 filtRs <- file.path(filt_path, basename(fnRs))
 
-# name the objects in the list
-sample.names <- paste('sample', gsub('_.*', '', basename(filtFs)), sep = '_')
-names(filtFs) <- sample.names
-names(filtRs) <- sample.names
+# name files
+names(filtFs) <- sample_namesF
+names(filtRs) <- sample_namesR
 
+# from here this should be run in one go
 # learn error rates ####
 # if this has been done before, assign error rates
 if(length(grep('fwd_error', ls())) == 1){
@@ -126,8 +146,8 @@ if(length(grep('fwd_error', ls())) == 0){
 derepFs <- derepFastq(filtFs, verbose = TRUE)
 derepRs <- derepFastq(filtRs, verbose = TRUE)
 # Name the derep-class objects by the sample names
-names(derepFs) <- sample.names
-names(derepRs) <- sample.names
+names(derepFs) <- sample_namesF
+names(derepRs) <- sample_namesR
 cat(paste('\nDereplicated forward and reverse files', Sys.time()), file = progress_file, append = TRUE)
 
 # infer sequence data ####
@@ -156,16 +176,68 @@ cat(paste('\nChimeric sequences removed', Sys.time()), file = progress_file, app
 getN <- function(x) sum(getUniques(x))
 track <- cbind(out, sapply(dadaFs, getN), sapply(mergers, getN), rowSums(seqtab_all), rowSums(seqtab))
 colnames(track) <- c("input", "filtered", "denoised", "merged", "tabled", "nonchim")
-rownames(track) <- sample.names
+rownames(track) <- sample_namesF
 head(track)
 
 saveRDS(track, paste(output_path, '/', time, 'track_reads_through_stages.rds', sep = ''))
 
+# plot out tracking of sample reads through stages ####
+samps <- row.names(track)
+track <- data.frame(track) %>%
+  mutate(samps = samps) %>%
+  gather(., 'stage', 'reads', c(input, filtered, denoised, merged, tabled, nonchim))
+
+ggplot(track, aes(forcats::fct_relevel(stage, c('input', 'filtered', 'denoised', 'merged', 'tabled', 'nonchim')), reads)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.2, height = 0), shape = 21, fill = 'white') +
+  ylab('Number of reads') +
+  xlab('Sequencing stage')
+
+ggsave(paste(plot_path, '/', time, 'track_reads.pdf', sep = ''), height = 5, width = 7)
+
+
 # assign taxonomy ####
 taxtab <- assignTaxonomy(seqtab, refFasta = ref_fasta)
-if(!is.null(ref_fasta_spp)){taxtab <- addSpecies(taxtab, refFasta = ref_fasta_spp)}
-colnames(taxtab) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
 cat(paste('\nTaxonomy assigned', Sys.time()), file = progress_file, append = TRUE)
+if(!is.null(ref_fasta_spp)){
+  cat(paste('\nAssigning species at', Sys.time(), '\n'), file = progress_file, append = TRUE)
+  spp_assign <- capture.output(taxtab <- addSpecies(taxtab, refFasta = ref_fasta_spp, verbose = TRUE))
+  cat(spp_assign, file = progress_file, append = TRUE)
+  cat(paste('\nSpecies assigned', Sys.time()), file = progress_file, append = TRUE)
+}
+colnames(taxtab) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+# save files in case phylogeny does not run
+saveRDS(taxtab, paste(output_path, '/', time, 'taxtab.rds', sep = ''))
+saveRDS(seqtab, paste(output_path, '/', time, 'seqtab.rds', sep = ''))
+
+# subset meta for just the samples present
+
+# SampleID needs to match sample_namesF
+meta <- filter(meta, SampleID %in% sample_namesF)
+rownames(meta) <- meta$SampleID
+ps <- phyloseq(tax_table(taxtab), 
+               sample_data(meta),
+               otu_table(seqtab, taxa_are_rows = FALSE))
+
+# save a phyloseq object without the phylogeny
+saveRDS(ps, paste(output_path, '/', time, 'ps.rds', sep = ''))
+save(ps, file = paste(output_path, '/', time, 'ps.Rdata', sep = ''))
+
+# plot error rates ####
+pdf(paste(plot_path, '/', time, 'error_rates.pdf', sep = ''))
+plotErrors(dd_learnF) +
+  ggtitle('Forward error rates')
+plotErrors(dd_learnR) +
+  ggtitle('Reverse error rates')
+dev.off()
+
+cat(paste('\nEnd of raw read processing without construction of phylogeny', Sys.time()), file = progress_file, append = TRUE)
+
+# End time
+end_time <- Sys.time()
+
+cat(paste('\nThis run (without phylogeny estimation) took:', difftime(end_time, start_time, unit = 'hours'), 'hours', sep = ' '), file = progress_file, append = TRUE)
 
 # multiple alignment ####
 seqs <- getSequences(seqtab)
@@ -202,14 +274,6 @@ saveRDS(ps, paste(output_path, '/', time, 'ps.rds', sep = ''))
 save(ps, file = paste(output_path, '/', time, 'ps.Rdata', sep = ''))
 
 cat(paste('\nEnd of raw read processing', Sys.time()), file = progress_file, append = TRUE)
-
-# plot error rates ####
-pdf(paste(plot_path, '/', time, 'error_rates.pdf', sep = ''))
-plotErrors(dd_learnF) +
-  ggtitle('Forward error rates')
-plotErrors(dd_learnR) +
-  ggtitle('Reverse error rates')
-dev.off()
 
 # End time
 end_time <- Sys.time()

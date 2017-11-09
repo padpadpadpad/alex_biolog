@@ -9,12 +9,18 @@ library(ggplot2)
 library(magrittr)
 library(vegan)
 library(gridExtra)
+library(viridis)
 
 # figure path
 path_fig <- 'sequencing/plots'
 
 # load data - latest run which we are happy with ####
 ps <- readRDS('sequencing/data/output/20171024_17:18/20171024_17:18_ps.rds')
+
+meta_new <- read.csv('sequencing/data/metadata.csv', stringsAsFactors = FALSE)
+row.names(meta_new) <- meta_new$SampleID
+
+sample_data(ps) <- sample_data(meta_new)
 
 # show available ranks in the dataset
 rank_names(ps)
@@ -72,7 +78,15 @@ p_wUni <- plot_ordination(ps_prop, ord_wUni, color = "treatment") +
   coord_fixed(sqrt(evals[2] / evals[1])) +
   geom_point(size = 2) +
   theme_bw(base_size = 14, base_family = 'Helvetica') +
-  ggtitle('PCoA plot based on weighted Unifrac distances')
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  facet_wrap(~ treatment)
+
+plot_ordination(ps_prop, ord_wUni, type = 'taxa', color = "Phylum") +
+  coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  facet_wrap(~ Phylum)
 
 ps_wunifrac <- phyloseq::distance(ps_prop, method = 'wunifrac')
 
@@ -108,3 +122,77 @@ plot_all <- grid.arrange(p_unUni + theme(legend.position = 'none'),
              ncol = 3)
 
 ggsave(file.path(path_fig, 'ordination.pdf'), plot_all, height = 7, width = 20)
+
+###################
+# create taxonomy summaries ####
+
+phylum_glom <- tax_glom(ps, taxrank = "Phylum" )
+
+# convert counts to proportions
+phylum_prop <- transform_sample_counts(phylum_glom, function(x){x / sum(x)})
+
+# plot bar plot
+plot_bar(phylum_prop, fill = "Phylum") +
+  facet_wrap(~treatment, scale = 'free_x')
+
+# re ordinate the data!!!
+#####################
+# 2. Weighted Unifrac ####
+ord_wUni <- ordinate(phylum_prop, method = 'MDS', distance = 'wunifrac')
+
+evals <- ord_wUni$values$Eigenvalues
+
+plot_ordination(phylum_prop, ord_wUni, color = "treatment") +
+  coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  facet_wrap(~Phylum)
+
+plot_ordination(four_clones, ord_wUni, color = "preadapt_pop", shape = 'evolution') +
+  coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  scale_color_viridis(discrete = TRUE) +
+  facet_wrap(~ evolution)
+
+
+
+
+# individual clones only ####
+ind_clonesID <- filter(meta_new, treatment == 'individual_clone')
+ind_clones <- prune_samples(ind_clonesID$SampleID, phylum_prop)
+
+ord_wUni <- ordinate(ind_clones, method = 'MDS', distance = 'wunifrac')
+
+evals <- ord_wUni$values$Eigenvalues
+
+plot_ordination(ind_clones, ord_wUni, color = "preadapt_pop", shape = 'evolution') +
+  coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  scale_color_viridis(discrete = TRUE) +
+  facet_wrap(~ evolution)
+
+# 4 clones only 
+# individual clones only ####
+four_clonesID <- filter(meta_new, treatment %in% c('4_related_clones', '4_unrelated_clones'))
+four_clones <- prune_samples(four_clonesID$SampleID, phylum_prop)
+
+ord_wUni <- ordinate(four_clones, method = 'MDS', distance = 'wunifrac')
+
+evals <- ord_wUni$values$Eigenvalues
+
+plot_ordination(four_clones, ord_wUni, color = "preadapt_pop", shape = 'evolution') +
+  coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  scale_color_viridis(discrete = TRUE) +
+  facet_wrap(~ evolution)
+
+
+
+plot_net(ps, maxdist = 0.4, point_label = "treatment", col = 'evolution')
