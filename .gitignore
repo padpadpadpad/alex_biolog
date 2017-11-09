@@ -3,9 +3,30 @@
 .Rhistory
 
 # do not track some data folders as they are too big
-sequencing/data/raw_data/*
-sequencing/data/Filtered/*
+sequencing/data/raw_fastq/*
+sequencing/data/filtered_fastq/*
 sequencing/data/ref_trainsets/*
-sequencing/data/output/20171103_13:27/20171103_13:27_dadaFs\.rds
 
+sequencing/data/output/20171103_13:27/20171103_13:27_dadaFs\.rds
 sequencing/data/output/20171103_13:27/20171103_13:27_dadaRs\.rds
+
+sequencing/data/*fastq
+
+
+sequencing/data/output/20171108_16h43m/rev_master_preFilt_20171108_16h43m\.fastq
+
+sequencing/data/output/20171109_09h20m/fwd_master_preFilt_20171109_09h20m\.fastq
+
+sequencing/data/output/20171109_09h20m/rev_master_preFilt_20171109_09h20m\.fastq
+
+sequencing/data/output/20171109_09h24m/20171109_09h24m_fwd_error\.rds
+
+sequencing/data/output/20171109_09h24m/fwd_master_postFilt_20171109_09h24m\.fastq
+
+sequencing/data/output/20171109_09h24m/fwd_master_preFilt_20171109_09h24m\.fastq
+
+sequencing/data/output/20171109_09h24m/rev_master_postFilt_20171109_09h24m\.fastq
+
+sequencing/data/output/20171109_09h24m/rev_master_preFilt_20171109_09h24m\.fastq
+
+sequencing/data/output/20171108_16h43m/fwd_master_preFilt_20171108_16h43m\.fastq
