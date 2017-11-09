@@ -28,8 +28,10 @@ d <- merge(d, meta, by = 'id')
 d_ancest <- MicrobioUoE::bind_biolog_all('biolog/data/20170124_Ancestors_gn2biolog.xlsx', sheets = 'Sheet1') %>%
   mutate(id = id + 50)
 meta_ancest <- data.frame(id = 51:58, treatment = 'wild_type', stringsAsFactors = FALSE)
-d_ancest <- merge(d_ancest, meta_ancest, by = 'id')
-d <- bind_rows(d, d_ancest)
+d_ancest <- merge(d_ancest, meta_ancest, by = 'id') %>%
+  filter(., id > 54)
+d <- bind_rows(d, d_ancest) %>%
+  filter(., id != 49)
 
 # which columns are substrates
 Carb_cols <- colnames(d)[grepl('X', colnames(d))]
