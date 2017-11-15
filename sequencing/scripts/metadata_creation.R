@@ -1,5 +1,6 @@
 # create metadata file ####
 
+# load in packages ####
 library(dplyr)
 library(tidyr)
 
@@ -10,7 +11,8 @@ meta <- read.csv('sequencing/data/soil_community_data_samplenames.csv', stringsA
          treatment = Treatment_label,
          evolution = Evolved_with.without_community,
          preadapt_pop = Preadaptation.population,
-         fitness = Fitness) %>%
+         fitness = Fitness.W.,
+         bio_var = Biolog_Variance) %>%
   dplyr::mutate(treatment = tolower(treatment),
                 treatment = gsub('-', '', treatment),
                 SampleID = paste('sample', SampleID, sep = '_')) %>%

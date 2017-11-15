@@ -1,4 +1,4 @@
-# PERMANOVA and ordination ####
+# play with analyses of sequencing data ####
 rm(list = ls())
 
 # load packages ####
@@ -127,32 +127,71 @@ plot_all <- grid.arrange(p_unUni + theme(legend.position = 'none'),
 
 ggsave(file.path(path_fig, 'ordination.pdf'), plot_all, height = 7, width = 20)
 
-###################
+################################
 # create taxonomy summaries ####
 
+# summarise phyloseq object at the Phylum level
 phylum_glom <- tax_glom(ps, taxrank = "Phylum" )
+
+# filter for the 10 most common phyla
+
+# function for ease of use
+# code stolen from phyloseq website
+get_top_taxa <- function(ps, tax_rank, to_keep){
+  temp <- tapply(phyloseq::taxa_sums(ps), phyloseq::tax_table(ps)[, tax_rank], sum, na.rm = TRUE)
+  temp2 <-  names(sort(temp, TRUE))[1:to_keep]
+  return(temp2)
+}
+
+# filter
+phylum_glom_filt <- prune_taxa((tax_table(phylum_glom)[, "Phylum"] %in% get_top_taxa(phylum_glom, 'Phylum', 10)), phylum_glom)
 
 # convert counts to proportions
 phylum_prop <- transform_sample_counts(phylum_glom, function(x){x / sum(x)})
+phylum_prop_filt <- transform_sample_counts(phylum_glom_filt, function(x){x / sum(x)})
 
 # plot bar plot
-plot_bar(phylum_prop2, fill = "Phylum") +
-  facet_wrap(~treatment, scale = 'free_x')
+plot_bar(phylum_prop_filt, fill = "Phylum") +
+  facet_wrap(~ treatment, scale = 'free_x')
 
 # try to create a prettier bar plot
-d_glom <- psmelt(phylum_glom)
+
+# get data
+d_glom <- psmelt(phylum_glom_filt)
+
+# group by treatments
 d_glom_group <- group_by(d_glom, treatment, preadapt_pop, evolution) %>%
   do(., data.frame(prop = .$Abundance/sum(.$Abundance), Phylum = .$Phylum)) %>%
   ungroup()
 
-ggplot(d_glom_group, aes(interaction(treatment, preadapt_pop, evolution), prop, fill = Phylum)) +
+ggplot(d_glom_group, aes(treatment, prop, fill = Phylum)) +
   geom_bar(position = 'fill', stat = 'identity') +
-  theme(axis.text.x = element_text(angle = 90)) +
-  facet_wrap(~ treatment, scale = 'free_x')
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ preadapt_pop, scale = 'free_x')
 
-# re ordinate the data!!!
+# re ordinate the data!!! ####
 #####################
-# 2. Weighted Unifrac ####
+
+# double principal component analysis
+ord_dpcoa <- ordinate(ps_prop, method = 'DPCoA')
+
+evals <- ord_dpcoa$eig
+
+p_taxa_dpcoa <- plot_ordination(ps_prop, ord_dpcoa, type = 'taxa', color = "Phylum") +
+  #coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('DPCoA plot of phylum position') 
+
+p_samp_dpcoa <- plot_ordination(phylum_prop_filt, ord_dpcoa, type = 'samples', color = "treatment") +
+  #coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('DPCoA plot of ')
+
+grid.arrange(p_taxa_dpcoa, p_samp_dpcoa)
+
+# Weighted Unifrac ####
 ord_wUni <- ordinate(phylum_prop, method = 'MDS', distance = 'wunifrac')
 
 evals <- ord_wUni$values$Eigenvalues
