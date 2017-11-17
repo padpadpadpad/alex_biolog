@@ -131,7 +131,7 @@ ggsave(file.path(path_fig, 'ordination.pdf'), plot_all, height = 7, width = 20)
 # create taxonomy summaries ####
 
 # summarise phyloseq object at the Phylum level
-phylum_glom <- tax_glom(ps, taxrank = "Phylum" )
+phylum_glom <- tax_glom(ps, taxrank = "Genus")
 
 # filter for the 10 most common phyla
 
@@ -144,14 +144,14 @@ get_top_taxa <- function(ps, tax_rank, to_keep){
 }
 
 # filter
-phylum_glom_filt <- prune_taxa((tax_table(phylum_glom)[, "Phylum"] %in% get_top_taxa(phylum_glom, 'Phylum', 10)), phylum_glom)
+phylum_glom_filt <- prune_taxa((tax_table(phylum_glom)[, "Genus"] %in% get_top_taxa(phylum_glom, 'Genus', 15)), phylum_glom)
 
 # convert counts to proportions
 phylum_prop <- transform_sample_counts(phylum_glom, function(x){x / sum(x)})
 phylum_prop_filt <- transform_sample_counts(phylum_glom_filt, function(x){x / sum(x)})
 
 # plot bar plot
-plot_bar(phylum_prop_filt, fill = "Phylum") +
+plot_bar(phylum_prop_filt, fill = "Genus") +
   facet_wrap(~ treatment, scale = 'free_x')
 
 # try to create a prettier bar plot
@@ -211,12 +211,9 @@ plot_ordination(four_clones, ord_wUni, color = "preadapt_pop", shape = 'evolutio
   scale_color_viridis(discrete = TRUE) +
   facet_wrap(~ evolution)
 
-
-
-
 # individual clones only ####
 ind_clonesID <- filter(meta_new, treatment == 'individual_clone')
-ind_clones <- prune_samples(ind_clonesID$SampleID, phylum_prop)
+ind_clones <- prune_samples(ind_clonesID$SampleID, phylum_prop_filt)
 
 ord_wUni <- ordinate(ind_clones, method = 'MDS', distance = 'wunifrac')
 
@@ -227,8 +224,12 @@ plot_ordination(ind_clones, ord_wUni, color = "preadapt_pop", shape = 'evolution
   geom_point(size = 2) +
   theme_bw(base_size = 14, base_family = 'Helvetica') +
   ggtitle('PCoA plot based on weighted Unifrac distances') +
-  scale_color_viridis(discrete = TRUE) +
   facet_wrap(~ evolution)
+
+plot_bar(ind_clones, fill = "Phylum") +
+  facet_wrap(~ preadapt_pop, scale = 'free_x') +
+  scale_x_discrete(labels = as.character(c(1:6))) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0, vjust = 0))
 
 # 4 clones only 
 # individual clones only ####
@@ -248,8 +249,6 @@ plot_ordination(four_clones, ord_wUni, color = "preadapt_pop", shape = 'evolutio
   theme_bw(base_size = 14, base_family = 'Helvetica') +
   ggtitle('PCoA plot based on weighted Unifrac distances') +
   facet_wrap(~ evolution)
-
-
 
 plot_net(ps, maxdist = 0.4, point_label = "treatment", col = 'evolution')
 
