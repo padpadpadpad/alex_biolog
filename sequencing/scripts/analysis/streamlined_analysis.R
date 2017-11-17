@@ -276,6 +276,21 @@ ggplot() +
 
 ggsave(file.path(path_fig, 'PCoA_plot.pdf'), last_plot(), height = 6, width = 12)
 
+ggplot() +
+  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 5) +
+  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$eigenvector, alpha = 0.1) +
+  #geom_path(aes(PCoA1, PCoA2, col = group, group = group), betadisper_dat$chull, alpha = 0.1) +
+  geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(betadisper_lines), col = group), betadisper_lines, alpha = 0.1) +
+  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  ylab('PCoA Axis 2 [17.6%]') +
+  xlab('PCoA Axis 2 [45.6%]') +
+  theme(legend.position = 'bottom') +
+  coord_fixed(sqrt(betadisper_dat$eigenvalue$percent[2]/betadisper_dat$eigenvalue$percent[1])) +
+  ggtitle('PCoA plot with centroids emphasised')
+
+ggsave(file.path(path_fig, 'PCoA_plot2.pdf'), last_plot(), height = 5, width = 8)
+
+
 # plot distances from centroid
 ggplot(betadisper_dat$distances, aes(group, distances, fill = group, col = group)) +
   geom_boxplot(aes(fill = group, col = group), outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
