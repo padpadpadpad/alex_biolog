@@ -1,4 +1,4 @@
-# streamlined script for analysis thus far ####
+# analysis of number of clone in sample ####
 rm(list = ls())
 
 # load packages ####
@@ -11,6 +11,8 @@ library(vegan)
 library(gridExtra)
 library(viridis)
 library(ggridges)
+library(tibble)
+library(patchwork) # devtools::install_github('thomasp85/patchwork')
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
 # functions ####
@@ -72,6 +74,12 @@ get_betadisper_data <- function(model){
   return(temp)
 }
 
+
+# get distance from 00
+dist_between_points <- function(x1, x2, y1, y2){
+  return(abs(sqrt((x1 - x2)^2+(y1-y2)^2)))
+}
+
 # set seed
 set.seed(42)
 
@@ -83,11 +91,10 @@ path_fig <- 'sequencing/plots'
 ps <- readRDS('sequencing/data/output/20171024_17:18/20171024_17:18_ps.rds')
 
 # replace metadata with new metadata
+# when wanting to add columns to metadata, it is better to edit metadata_creation and overwrite the metadata file as then it can be overwritten in all future files
 meta_new <- read.csv('sequencing/data/metadata.csv', stringsAsFactors = FALSE)
 row.names(meta_new) <- meta_new$SampleID
 sample_data(ps) <- sample_data(meta_new)
-
-# add a diversity column 
 
 # show available ranks in the dataset
 rank_names(ps)
@@ -98,34 +105,21 @@ min(sample_sums(ps)) # min of 30,000. Woof.
 
 # not going to rarefy those samples yet
 
-# can plot rarefaction curves
-# code from https://www.fromthebottomoftheheap.net/2015/04/16/drawing-rarefaction-curves-with-custom-colours/
-# written by Gavin Simpson himself (an author of vegan)
+# DIVERSITY ANALYSIS ####
+# Look at the effect of number of clones on community composition (as clustering)
 
-# check rarefaction curves ####
-ps_otu_table <- data.frame(otu_table(ps))
-raremax <- min(rowSums(ps_otu_table))
-col <- c('black', 'blue', 'yellow', 'red', 'orange', 'grey', 'hotpink', 'purple', 'green')
-lty <- c("solid", "dashed", "longdash", "dotdash")
-pars <- expand.grid(col = col, lty = lty, stringsAsFactors = FALSE)
-out <- with(pars,
-            rarecurve(ps_otu_table, step = 1000, sample = raremax, col = col,
-                      lty = lty, label = FALSE))
-
-# having done similar analyses on the rarefied samples they give very similar results. Therefore will use the unrarefied samples for the ordinations
-
-# filter some samples ####
+# filter some samples with NA for n_clones ####
+# specifically negative control, nmc_T0 & wt_ancestor (dont care as only lacz were in the communities)
 # specifically wt ancestor and nmc_t0
-to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', 'wt_ancestor'))
-ps <- prune_samples(to_keep$SampleID, ps)
+to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', 'negative_control', 'wt_ancestor'))
+ps2 <- prune_samples(to_keep$SampleID, ps)
 
 # transform counts to relative abundances for ordination ####
-ps_prop <- transform_sample_counts(ps, function(x){x / sum(x)})
+ps_prop <- transform_sample_counts(ps2, function(x){x / sum(x)})
 
+# Weighted Unifrac ####
 # weighted Unifrac distance
 # to change the ordination - see https://joey711.github.io/phyloseq/plot_ordination-examples.html and https://joey711.github.io/phyloseq/distance.html
-
-# 1. Weighted Unifrac ####
 
 # do weighted unifrac
 ord_wUni <- ordinate(ps_prop, method = 'MDS', distance = 'wunifrac')
@@ -149,86 +143,32 @@ ps_wunifrac <- phyloseq::distance(ps_prop, method = 'wunifrac')
 
 # make a data frame of the sample data
 d_samp <- data.frame(sample_data(ps_prop))
-d_samp$treatment <- as.factor(d_samp$treatment)
+d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
+                 nclones_fac = as.factor(nclones_fac)) %>%
+  column_to_rownames(., 'SampleID')
 
 # run an Adonis test
-mod1 <- vegan::adonis(ps_wunifrac ~ treatment, data = d_samp)
+mod_nclone <- vegan::adonis(ps_wunifrac ~ n_clones + , data = d_samp, n_perm = 9999)
+mod_nclonefac <-  vegan::adonis(ps_wunifrac ~ nclones_fac, data = d_samp, n_perm = 9999)
 
 # run a multiple comparison to see which treatments are different
-mult_comp <- mctoolsr::calc_pairwise_permanovas(ps_wunifrac, d_samp, 'treatment', n_perm = 9999)
+mult_comp <- mctoolsr::calc_pairwise_permanovas(ps_wunifrac, d_samp, 'nclones_fac', n_perm = 9999)
 # loads of comparisons. Significant differences will be determined by p value correction.
 
-################################
-# create taxonomy summaries ####
+# overwrite metadata to allow plotting of nclones_fac
+sample_data(ps_prop) <- sample_data(d_samp)
 
-# summarise phyloseq object at the Phylum level
-tax_group <- tax_glom(ps, taxrank = "Genus")
-
-# filter for the 10 most common genus ####
-tax_group_filt <- prune_taxa((tax_table(tax_group)[, "Genus"] %in% get_top_taxa(tax_group, 'Genus', 10)), tax_group)
-
-# convert counts to proportions
-tax_prop <- transform_sample_counts(tax_group, function(x){x / sum(x)})
-tax_prop_filt <- transform_sample_counts(tax_group_filt, function(x){x / sum(x)})
-
-# plot bar plot
-plot_bar(tax_prop_filt, fill = "Genus") +
-  facet_wrap(~ treatment, scale = 'free_x')
-
-# save plot, other ways are available
-ggsave(file.path(path_fig, 'plot_bar1.pdf'), last_plot(), height = 7, width = 12)
-
-# try to create a prettier bar plot
-
-# get data
-d_glom <- psmelt(tax_prop_filt)
-
-# group by treatments
-d_glom_group <- group_by(d_glom, treatment, preadapt_pop, evolution) %>%
-  do(., data.frame(prop = .$Abundance/sum(.$Abundance), Genus = .$Genus)) %>%
-  ungroup()
-
-# plot these
-ggplot(d_glom_group, aes(treatment, prop, fill = Genus, col = Genus)) +
-  geom_bar(position = 'fill', stat = 'identity') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  ggtitle('Relative abundance of 10 most abundant genus groups')
-
-ggsave(file.path(path_fig, 'plot_bar2.pdf'), last_plot(), height = 5, width = 8)
-
-# re ordinate the data to see if aggregating each phylum made a difference ####
-
-# Weighted Unifrac ####
-ord_wUni2 <- ordinate(tax_prop, method = 'MDS', distance = 'wunifrac')
-
-evals2 <- ord_wUni2$values$Eigenvalues
-
-plot_ordination(tax_prop, ord_wUni2, color = "treatment") +
-  coord_fixed(sqrt(evals[2] / evals[1])) +
+# plot ordination
+plot_ordination(ps_prop, ord_wUni, color = "nclones_fac", shape = 'treatment') +
   geom_point(size = 2) +
-  theme_bw(base_size = 14, base_family = 'Helvetica') +
-  ggtitle('PCoA plot based on weighted Unifrac distances') +
-  facet_wrap(~treatment)
+  scale_shape_discrete('Treatment') +
+  stat_ellipse(aes(fill = nclones_fac, group = nclones_fac), geom = 'polygon', type = "t", alpha = 0.05) +
+  theme_bw(base_size = 10, base_family = 'Helvetica') +
+  ylab('PCoA2 [18.4%]') +
+  xlab('PCoA1 [44.2%]')
 
-# plot original again
-plot_ordination(ps_prop, ord_wUni, color = "treatment") +
-  coord_fixed(sqrt(evals[2] / evals[1])) +
-  geom_point(size = 2) +
-  theme_bw(base_size = 14, base_family = 'Helvetica') +
-  ggtitle('PCoA plot based on weighted Unifrac distances') +
-  facet_wrap(~ treatment)
-
-# does change things - do not think this is a huge problem right now
-
-# do beta diversity analysis ####
-# Looking at variance across groups
-# assume all samples are independent
-
-# use raw proportion data
-
-# can only do one factor would use every combination of id
-# have negative eigenvalues, need to correct for these...?
-mod1_dispers <- betadisper(ps_wunifrac, d_samp$treatment)
+# beta-diversity analysis - look at homogeneity of variances
+mod1_dispers <- betadisper(ps_wunifrac, d_samp$nclones_fac)
 
 # plot of model
 plot(mod1_dispers)
@@ -243,7 +183,7 @@ pmod <- permutest(mod1_dispers, pairwise = TRUE)
 # Tukey's Honest Significant Differences
 T_HSD <- TukeyHSD(mod1_dispers)
 
-# no differences...
+# plot distances to centroid - try and play with alpha
 
 # get betadisper data ####
 betadisper_dat <- get_betadisper_data(mod1_dispers)
@@ -261,90 +201,36 @@ betadisper_dat$chull <- group_by(betadisper_dat$eigenvector, group) %>%
 # combine centroid and eigenvector dataframes for plotting
 betadisper_lines <- merge(select(betadisper_dat$centroids, group, PCoA1, PCoA2), select(betadisper_dat$eigenvector, group, PCoA1, PCoA2), by = c('group'))
 
-# Now the dataframes are all ready to be completely customisable in ggplot
-# plot betadispersion plot
-ggplot() +
-  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 4) +
-  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$eigenvector) +
-  geom_path(aes(PCoA1, PCoA2, col = group, group = group), betadisper_dat$chull ) +
-  geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(betadisper_lines), col = group), betadisper_lines) +
-  theme_bw(base_size = 12, base_family = 'Helvetica') +
-  ylab('PCoA Axis 2 [17.6%]') +
-  xlab('PCoA Axis 2 [45.6%]') +
-  theme(legend.position = c(0.9, 0.1)) +
-  coord_fixed(sqrt(betadisper_dat$eigenvalue$percent[2]/betadisper_dat$eigenvalue$percent[1])) +
-  facet_wrap(~ group) +
-  ggtitle('PCoA plot with centroids per treatment')
+# add distances to eigenvector and lines data
+betadisper_lines <- mutate(betadisper_lines, distances = dist_between_points(PCoA1.x, PCoA2.x, PCoA1.y, PCoA2.y))
+betadisper_dat$eigenvector$distances <- betadisper_dat$distances$distances
 
-ggsave(file.path(path_fig, 'PCoA_plot.pdf'), last_plot(), height = 6, width = 12)
-
-ggplot() +
+# plot PCoA
+p1 <- ggplot() +
   geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 5) +
-  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$eigenvector, alpha = 0.1) +
+  geom_point(aes(PCoA1, PCoA2, col = group, alpha = 1 - distances), betadisper_dat$eigenvector, size = 0.75) +
   #geom_path(aes(PCoA1, PCoA2, col = group, group = group), betadisper_dat$chull, alpha = 0.1) +
-  geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(betadisper_lines), col = group), betadisper_lines, alpha = 0.1) +
+  #geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(betadisper_lines), col = group, alpha = 1 - distances), betadisper_lines) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
-  ylab('PCoA Axis 2 [17.6%]') +
-  xlab('PCoA Axis 2 [45.6%]') +
+  stat_ellipse(aes(PCoA1, PCoA2, col = group, group = group), type = "t", betadisper_dat$eigenvector) +
+  ylab('PCoA Axis 2 [18.37%]') +
+  xlab('PCoA Axis 1 [44.31%]') +
   theme(legend.position = 'bottom') +
   coord_fixed(sqrt(betadisper_dat$eigenvalue$percent[2]/betadisper_dat$eigenvalue$percent[1])) +
-  ggtitle('PCoA plot with centroids emphasised')
-
-ggsave(file.path(path_fig, 'PCoA_plot2.pdf'), last_plot(), height = 5, width = 8)
-
+  ggtitle('PCoA plot with closer points emphasised') +
+  scale_alpha(range = c(0.0001, 0.75), guide = FALSE)
 
 # plot distances from centroid
-ggplot(betadisper_dat$distances, aes(group, distances, fill = group, col = group)) +
+p2 <- ggplot(betadisper_dat$distances, aes(forcats::fct_relevel(group, 'C_24', after = 2), distances, fill = group, col = group)) +
   geom_boxplot(aes(fill = group, col = group), outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
   stat_summary(position = position_dodge(width = 0.55), geom = 'crossbar', fatten = 0, color = 'white', width = 0.4, fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x)))}) +
-  geom_point(aes(group, distances, col = group), shape = 21, fill ='white', position = position_jitterdodge(dodge.width = 0.55, jitter.width = 0.2)) +
+  geom_point(aes(group, distances, col = group), shape = 21, fill ='white', position = position_jitterdodge(dodge.width = 0.55, jitter.width = 0.3)) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
   ylab('Distance to centroid') +
-  theme(legend.position = 'none',
-        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.position = 'none') +
   xlab('') +
   ggtitle('Distance from centroid')
 
-ggsave(file.path(path_fig, 'dist_centroid.pdf'), last_plot(), height = 5, width = 8)
+p3 <- p1 + p2 + plot_layout(ncol = 2, widths = c(2.5, 1))
 
-# plot as joy plot
-ggplot(betadisper_dat$distances, aes(distances, group, fill = group, col = group)) +
-  geom_density_ridges() +
-  xlab('distance from centroid') +
-  ggtitle('Distance from centroid')
-
-ggsave(file.path(path_fig, 'dist_centroid2.pdf'), last_plot(), height = 6, width = 10)
-
-# individual clones only - look at effect of fitness on clustering ####
-ind_clonesID <- filter(meta_new, treatment == 'individual_clone')
-ind_clones <- prune_samples(ind_clonesID$SampleID, ps_prop)
-
-ord_wUni <- ordinate(ind_clones, method = 'MDS', distance = 'wunifrac')
-
-evals <- ord_wUni$values$Eigenvalues
-
-plot_ordination(ind_clones, ord_wUni, color = "fitness", shape = 'evolution') +
-  coord_fixed(sqrt(evals[2] / evals[1])) +
-  geom_point(size = 2) +
-  theme_bw(base_size = 14, base_family = 'Helvetica') +
-  ggtitle('PCoA plot based on weighted Unifrac distances') +
-  scale_color_continuous(low = 'blue', high = 'red')
-
-# This does not seem to make a difference...
-
-# Plot individual clones with the 4 clone pairs, see if there is clustering towards a specific clone (based on fitness...)
-to_keepID <- filter(meta_new, treatment %in% c('4_related_clones', 'individual_clone'))
-subset_samps <- prune_samples(to_keepID$SampleID, ps_prop)
-
-ord_wUni <- ordinate(subset_samps, method = 'MDS', distance = 'wunifrac')
-
-evals <- ord_wUni$values$Eigenvalues
-
-plot_ordination(subset_samps, ord_wUni, color = "fitness", shape = 'treatment') +
-  coord_fixed(sqrt(evals[2] / evals[1])) +
-  geom_point(size = 2) +
-  theme_bw(base_size = 14, base_family = 'Helvetica') +
-  ggtitle('PCoA plot based on weighted Unifrac distances') +
-  scale_color_continuous(low = 'blue', high = 'red') +
-  facet_wrap(~ preadapt_pop)
-
+ggsave(file.path(path_fig, 'PCoA_plot_diversity.pdf'), p3, height = 5, width = 10)
