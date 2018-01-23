@@ -6,6 +6,7 @@ library(dplyr)
 library(tidyr)
 library(viridis)
 library(ggridges)
+library(lme4)
 
 # figure path
 path_fig <- 'biolog/figs'
@@ -71,7 +72,7 @@ arrange(., desc(OD_cor)) %>%
   mutate(., rank = 1:96) %>%
   ggplot(.) +
   geom_line(aes(rank, OD_cor, group = id, col = treatment), alpha = 0.25) +
-  stat_summary(aes(rank, OD_cor, col = treatment), fun.y = mean, geom = 'line', lwd = 1.25) +
+  stat_summary(aes(rank, OD_cor, col = treatment, group = treatment), fun.y = mean, geom = 'line') +
   scale_color_viridis(discrete = TRUE) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
   theme(legend.position = c(0.9, 0.8)) +
@@ -130,6 +131,16 @@ V_E_pop <- group_by(V_E, treatment) %>%
   summarise(V_E = mean(V_E)) %>%
   data.frame()
 
+# analyses
+# Genotypic variance
+mod_vg <- lmer(V_G ~ treatment + (1|C_source), V_G)
+lsmeans::lsmeans(mod_vg, pairwise ~ treatment)
+# NOPE
+
+# Phentypic variance
+mod_pg <- lm(V_E ~ treatment, V_E)
+lsmeans::lsmeans(mod_pg, pairwise ~ treatment)
+
 # plot genotypic and environmental variance across treatments ####
 # plot V_G and V_E ####
 V_G_plot <- ggplot(V_G, aes(treatment, V_G)) +
@@ -144,7 +155,7 @@ V_G_plot <- ggplot(V_G, aes(treatment, V_G)) +
   ggtitle(expression(Genotypic~variance~(V[G]))) +
   scale_color_viridis(discrete = TRUE) +
   scale_fill_viridis(discrete = TRUE) +
-  ylim(c(0, 0.1))
+  ylim(c(0, 0.46))
 
 V_E_plot <- ggplot(V_E, aes(treatment, V_E)) +
   geom_boxplot(aes(col = treatment, fill = treatment), outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
@@ -234,7 +245,6 @@ ggplot() +
 
 ggsave(file.path(path_fig, 'PCoA_across_treatments.pdf'), last_plot(), height = 5, width = 7)
 
-
 # distance plot
 ggplot(betadisper_dat$distances, aes(group, distances, fill = group, col = group)) +
   geom_boxplot(outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
@@ -244,7 +254,6 @@ ggplot(betadisper_dat$distances, aes(group, distances, fill = group, col = group
   scale_color_viridis('', discrete = TRUE, labels = c('Community', 'No Community', 'Wild Type')) +
   scale_fill_viridis('', discrete = TRUE, labels = c('Community', 'No Community', 'Wild Type')) +
   ylab('Distance to centroid') +
-  theme(legend.position = c(.83, .85)) +
   xlab('') +
   scale_x_discrete(labels = c('Community', 'No Community', 'Wild Type'))
 

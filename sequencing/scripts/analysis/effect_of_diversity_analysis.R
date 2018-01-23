@@ -80,7 +80,7 @@ path_fig <- 'sequencing/plots'
 
 # load data - latest run which we are happy with ####
 # these files need to be there
-ps <- readRDS('sequencing/data/output/20171024_17:18/ps_prevalence_filtered.rds')
+ps <- readRDS('sequencing/data/output/20171024_17:18/20171024_17:18_ps.rds')
 
 # replace metadata with new metadata
 meta_new <- read.csv('sequencing/data/metadata.csv', stringsAsFactors = FALSE)
@@ -94,7 +94,7 @@ rank_names(ps)
 
 # look at the number of reads per sample
 sample_sums(ps)
-min(sample_sums(ps)) # min of 28,000. Woof.
+min(sample_sums(ps)) # min of 30,000. Woof.
 
 # not going to rarefy those samples yet
 
@@ -291,6 +291,7 @@ ggplot() +
   ggtitle('PCoA plot with centroids emphasised')
 
 ggsave(file.path(path_fig, 'PCoA_plot2.pdf'), last_plot(), height = 5, width = 8)
+
 
 # plot distances from centroid
 ggplot(betadisper_dat$distances, aes(group, distances, fill = group, col = group)) +
