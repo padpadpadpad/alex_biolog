@@ -9,11 +9,14 @@ pop_dists <- function(x){
 }
 
 # function for getting environmental correlation of each pair of genotypes
-pop_cor <- function(x, n_gen, rows_delete){
+pop_cor <- function(x, id, rows_delete){
+  id2 <- dplyr::distinct_(x, id) %>%
+    pull() %>%
+    as.numeric()
   temp <- data.frame(t(x), stringsAsFactors = FALSE) %>%
     dplyr::filter(., ! row.names(.) %in% rows_delete) %>%
     dplyr::mutate_all(., as.numeric)
-  colnames(temp) <- 1:n_gen
+  colnames(temp) <- id2
   # delete rows
   temp_mat <- as.matrix(cor(temp)) %>%
     reshape2::melt(as.matrix(.), varnames = c('clone_j', 'clone_i')) %>%

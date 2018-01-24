@@ -1,5 +1,7 @@
 # analysis script
 
+rm(list = ls())
+
 # load packages
 library(ggplot2)
 library(dplyr)
@@ -7,6 +9,7 @@ library(tidyr)
 library(viridis)
 library(ggridges)
 library(lme4)
+library(patchwork)
 
 # figure path
 path_fig <- 'biolog/figs'
@@ -175,17 +178,106 @@ plot2 <- gridExtra::grid.arrange(V_G_plot, V_E_plot, ncol = 2)
 
 ggsave(file.path(path_fig, 'geno_enviro_var_plot.pdf'), plot2, height = 5, width = 10)
 
-# plot all carbon sources
+# plot all carbon sources ####
+y_axis_change <- group_by(d_stack2, rank) %>%
+  summarise(C_source = unique(C_source)) %>%
+  pull(C_source)
+
 ggplot(d_stack2) +
   geom_density_ridges2(aes(x = OD_cor, y = factor(rank), fill = treatment, col = treatment), alpha = 0.5, rel_min_height = 0.01) +
   scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
   geom_point(aes(x = WT, y = factor(rank)), size = 0.5) +
-  theme_bw()
+  theme_bw() +
+  scale_y_discrete(labels = y_axis_change) +
+  ylab('Carbon source') +
+  xlab('Optical Density')
 
 ggsave(file.path(path_fig, 'crazy_ggjoy_plot.pdf'), last_plot(), height = 12, width = 6)
 
-# try a pca
+# Calculate G x E interaction for each population ####
+# see Barrett et al. 2005 Am Nat and Venail et al. 2008 Nature
+# 1. calculate responsiveness - indicates differences in the environmental variances and thus measures diversity of resource exploitation strategies (specialists and generalists)
+# sum (V_Gj - V_Gi)^2/(2*n_genotypes(n-genotypes - 1))
+
+# create dataframe for standard deviation per clone across environments
+d_sd <- group_by(d_stack, treatment, id) %>%
+  summarise(., sd_E = sd(OD)) %>%
+  data.frame()
+
+# create 2 copies of this for merging later
+sd_j_clone <- rename(d_sd, clone_j = id, sd_j = sd_E) 
+sd_i_clone <- rename(d_sd, clone_i = id, sd_i = sd_E)
+
+# number of genotypes/clone per population
+n_gen = 24
+
+# create every pairwise combination of 1:n (clones/genotypes) for each population
+d_R <- group_by(d_sd, treatment) %>%
+  do(data.frame(expand.grid(clone_j = .$id, clone_i = .$id))) %>%
+  ungroup() %>%
+  filter(., clone_j > clone_i) %>%
+  merge(., sd_j_clone, by = c('clone_j', 'treatment')) %>%
+  merge(., sd_i_clone, by = c('clone_i', 'treatment'))
+
+# calculate R for each pairwise combination
+d_R <- group_by(d_R, treatment) %>%
+  mutate(., R_comb = (sd_j - sd_i)^2/(length(unique(clone_i))*(length(unique(clone_i))-1))) %>%
+  ungroup()
+
+# calculate responsiveness for each population
+# sum of all the pairwise combinations
+d_R_pop <- group_by(d_R, treatment) %>%
+  summarise(., R_pop = sum(R_comb)) %>%
+  data.frame()
+
+# Plot responsiveness
+r_plot <- ggplot(d_R_pop, aes(treatment, R_pop)) +
+  geom_point(aes(treatment, R_pop, col = treatment)) +
+  ylab('responsiveness') +
+  xlab('Treatment') +
+  theme_bw() +
+  theme(legend.position = 'none') +
+  ggtitle('(a) Responsiveness') +
+  scale_colour_viridis(discrete = TRUE)
+
+# not significantly different
+# summary(lm(R_pop ~ treatment, d_R_pop))
+
+# calculate inconsistency ####
+
+d <- filter(d, id != 50)
+
+# prep data for calculating correlations
+d_pearson <- group_by(d, treatment) %>%
+  do(pop_cor(x = ., id = 'id', rows_delete = c('treatment', 'id', 'sheet'))) %>%
+  data.frame()
+
+# merge dataframe to responsiveness dataframe
+d_Inconsist <- merge(d_R, d_pearson, by = c('treatment', 'clone_j', 'clone_i')) %>%
+  mutate(., i = (sd_j*sd_i*(1-pear_cor))/(length(unique(clone_i))*(length(unique(clone_i))-1)))
+d_I_pop <- group_by(d_Inconsist, treatment) %>%
+  summarise(., I_pop = sum(i),
+            pear_pop = mean(pear_cor)) %>%
+  data.frame()
+
+# plot inconsistency
+I_plot <- ggplot(d_I_pop, aes(treatment, I_pop)) +
+  geom_point(aes(treatment, I_pop, col = treatment)) +
+  ylab('Inconsistency') +
+  xlab('Treatment') +
+  theme_bw() +
+  theme(legend.position = 'none') +
+  ggtitle('(b) Inconsistency') +
+  scale_color_viridis(discrete = TRUE)
+
+p_V_by_G <- r_plot + I_plot
+
+ggsave(file.path(path_fig, 'responsiveness.pdf'), p_V_by_G, height = 5, width = 10)
+
+summary(lm(I_pop ~ treat, d_I_pop))
+ 
+# try a pca ####
 d <- unite(d, 'id2', c(treatment, id), sep = '_', remove = FALSE)
 
 # data set ready for PCA
