@@ -23,14 +23,16 @@ d <- MicrobioUoE::bind_biolog_all('biolog/data/biolog_data_assay_1.xlsx', sheets
 # make into long format ####
 
 # meta data
-meta <- data.frame(id = 1:50, treatment = c(rep('comm', times = 24), rep('no_comm', times = 24), rep('wild_type', times = 2)), stringsAsFactors = FALSE)
+meta <- data.frame(id = 1:50, treatment = c(rep('comm', times = 24), rep('no_comm', times = 24), rep('wild_type', times = 2)), stringsAsFactors = FALSE) %>%
+  mutate(., pop = c(rep(1:12, each = 4), 13, 13))
 
 # data and metadata together
 d <- merge(d, meta, by = 'id')
 
 # load in ancestral data
 d_ancest <- MicrobioUoE::bind_biolog_all('biolog/data/20170124_Ancestors_gn2biolog.xlsx', sheets = 'Sheet1') %>%
-  mutate(id = id + 50)
+  mutate(id = id + 50,
+         pop = 13)
 meta_ancest <- data.frame(id = 51:58, treatment = 'wild_type', stringsAsFactors = FALSE)
 d_ancest <- merge(d_ancest, meta_ancest, by = 'id') %>%
   filter(., id > 54)
@@ -97,6 +99,8 @@ plot1b <- ggplot(d_stack) +
 plot1 <- gridExtra::grid.arrange(plot1a, plot1b, ncol = 1)
 
 ggsave(file.path(path_fig, 'performance_plot.pdf'), plot1, height = 10, width = 10)
+ggsave(file.path(path_fig, 'performance_plot2.pdf'), plot1a + facet_wrap(~treatment) + scale_color_manual(values = rep('black', 3)), height = 5, width = 12)
+
 
 # Calculate phenotypic variance ####
 
@@ -201,7 +205,7 @@ ggsave(file.path(path_fig, 'crazy_ggjoy_plot.pdf'), last_plot(), height = 12, wi
 # sum (V_Gj - V_Gi)^2/(2*n_genotypes(n-genotypes - 1))
 
 # create dataframe for standard deviation per clone across environments
-d_sd <- group_by(d_stack, treatment, id) %>%
+d_sd <- group_by(d_stack, treatment, pop, id) %>%
   summarise(., sd_E = sd(OD)) %>%
   data.frame()
 
@@ -209,31 +213,28 @@ d_sd <- group_by(d_stack, treatment, id) %>%
 sd_j_clone <- rename(d_sd, clone_j = id, sd_j = sd_E) 
 sd_i_clone <- rename(d_sd, clone_i = id, sd_i = sd_E)
 
-# number of genotypes/clone per population
-n_gen = 24
-
 # create every pairwise combination of 1:n (clones/genotypes) for each population
-d_R <- group_by(d_sd, treatment) %>%
+d_R <- group_by(d_sd, treatment, pop) %>%
   do(data.frame(expand.grid(clone_j = .$id, clone_i = .$id))) %>%
   ungroup() %>%
   filter(., clone_j > clone_i) %>%
-  merge(., sd_j_clone, by = c('clone_j', 'treatment')) %>%
-  merge(., sd_i_clone, by = c('clone_i', 'treatment'))
+  merge(., sd_j_clone, by = c('clone_j', 'treatment', 'pop')) %>%
+  merge(., sd_i_clone, by = c('clone_i', 'treatment', 'pop'))
 
 # calculate R for each pairwise combination
-d_R <- group_by(d_R, treatment) %>%
+d_R <- group_by(d_R, treatment, pop) %>%
   mutate(., R_comb = (sd_j - sd_i)^2/(length(unique(clone_i))*(length(unique(clone_i))-1))) %>%
   ungroup()
 
 # calculate responsiveness for each population
 # sum of all the pairwise combinations
-d_R_pop <- group_by(d_R, treatment) %>%
+d_R_pop <- group_by(d_R, treatment, pop) %>%
   summarise(., R_pop = sum(R_comb)) %>%
   data.frame()
 
 # Plot responsiveness
 r_plot <- ggplot(d_R_pop, aes(treatment, R_pop)) +
-  geom_point(aes(treatment, R_pop, col = treatment)) +
+  geom_point(aes(treatment, R_pop, col = treatment), size = 3) +
   ylab('responsiveness') +
   xlab('Treatment') +
   theme_bw() +
@@ -249,21 +250,21 @@ r_plot <- ggplot(d_R_pop, aes(treatment, R_pop)) +
 d <- filter(d, id != 50)
 
 # prep data for calculating correlations
-d_pearson <- group_by(d, treatment) %>%
-  do(pop_cor(x = ., id = 'id', rows_delete = c('treatment', 'id', 'sheet'))) %>%
+d_pearson <- group_by(d, treatment, pop) %>%
+  do(pop_cor(x = ., id = 'id', rows_delete = c('treatment', 'id', 'sheet', 'pop'))) %>%
   data.frame()
 
 # merge dataframe to responsiveness dataframe
-d_Inconsist <- merge(d_R, d_pearson, by = c('treatment', 'clone_j', 'clone_i')) %>%
+d_Inconsist <- merge(d_R, d_pearson, by = c('treatment', 'pop', 'clone_j', 'clone_i')) %>%
   mutate(., i = (sd_j*sd_i*(1-pear_cor))/(length(unique(clone_i))*(length(unique(clone_i))-1)))
-d_I_pop <- group_by(d_Inconsist, treatment) %>%
+d_I_pop <- group_by(d_Inconsist, treatment, pop) %>%
   summarise(., I_pop = sum(i),
             pear_pop = mean(pear_cor)) %>%
   data.frame()
 
 # plot inconsistency
 I_plot <- ggplot(d_I_pop, aes(treatment, I_pop)) +
-  geom_point(aes(treatment, I_pop, col = treatment)) +
+  geom_point(aes(treatment, I_pop, col = treatment), size = 3) +
   ylab('Inconsistency') +
   xlab('Treatment') +
   theme_bw() +

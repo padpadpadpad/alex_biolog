@@ -148,7 +148,7 @@ d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
   column_to_rownames(., 'SampleID')
 
 # run an Adonis test
-mod_nclone <- vegan::adonis(ps_wunifrac ~ n_clones + , data = d_samp, n_perm = 9999)
+mod_nclone <- vegan::adonis(ps_wunifrac ~ n_clones, data = d_samp, n_perm = 9999)
 mod_nclonefac <-  vegan::adonis(ps_wunifrac ~ nclones_fac, data = d_samp, n_perm = 9999)
 
 # run a multiple comparison to see which treatments are different
@@ -234,3 +234,242 @@ p2 <- ggplot(betadisper_dat$distances, aes(forcats::fct_relevel(group, 'C_24', a
 p3 <- p1 + p2 + plot_layout(ncol = 2, widths = c(2.5, 1))
 
 ggsave(file.path(path_fig, 'PCoA_plot_diversity.pdf'), p3, height = 5, width = 10)
+
+# analysis of just individual clones, wild type (lacz) vs pre-adapted ####
+
+# filter samples that are not individual clones ####
+# specifically negative control, nmc_T0 & wt_ancestor (dont care as only lacz were in the communities)
+# specifically wt ancestor and nmc_t0
+to_keep <- filter(meta_new, treatment %in% c('individual_clone', 'lacz_ancestor'))
+ps2 <- prune_samples(to_keep$SampleID, ps)
+
+# transform counts to relative abundances for ordination ####
+ps_prop <- transform_sample_counts(ps2, function(x){x / sum(x)})
+
+# Weighted Unifrac ####
+# weighted Unifrac distance
+# to change the ordination - see https://joey711.github.io/phyloseq/plot_ordination-examples.html and https://joey711.github.io/phyloseq/distance.html
+
+# do weighted unifrac
+ord_wUni <- ordinate(ps_prop, method = 'MDS', distance = 'wunifrac')
+
+evals <- ord_wUni$values$Eigenvalues
+
+# plot
+plot_ordination(ps_prop, ord_wUni, color = "treatment") +
+  coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  facet_wrap(~ treatment)
+# plot all on one panel by removing the facet_wrap command
+
+# get the distance matrix out of the data
+ps_wunifrac <- phyloseq::distance(ps_prop, method = 'wunifrac')
+
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_prop))
+d_samp <- mutate(d_samp,
+                 treatment = as.factor(treatment)) %>%
+  column_to_rownames(., 'SampleID')
+
+# run an Adonis test
+mod_treatment <-  vegan::adonis(ps_wunifrac ~ treatment, data = d_samp, n_perm = 9999)
+
+# overwrite metadata to allow plotting of nclones_fac
+sample_data(ps_prop) <- sample_data(d_samp)
+
+# plot ordination
+plot_ordination(ps_prop, ord_wUni, color = 'treatment') +
+  geom_point(size = 2) +
+  stat_ellipse(aes(fill = treatment, group = treatment), geom = 'polygon', type = "t", alpha = 0.05) +
+  theme_bw(base_size = 10, base_family = 'Helvetica') +
+  ylab('PCoA2 [19.6%]') +
+  xlab('PCoA1 [44.7%]')
+
+# beta-diversity analysis - look at homogeneity of variances
+mod1_dispers <- betadisper(ps_wunifrac, d_samp$treatment)
+
+# plot of model
+plot(mod1_dispers)
+boxplot(mod1_dispers)
+
+# anova
+anova(mod1_dispers)
+
+# Permutation test for F
+pmod <- permutest(mod1_dispers, pairwise = TRUE)
+
+# Tukey's Honest Significant Differences
+T_HSD <- TukeyHSD(mod1_dispers)
+
+# plot distances to centroid - try and play with alpha
+
+# get betadisper data ####
+betadisper_dat <- get_betadisper_data(mod1_dispers)
+
+# do some transformations on the data
+betadisper_dat$eigenvalue <- mutate(betadisper_dat$eigenvalue, percent = eig/sum(eig)*100)
+
+# add convex hull points ####
+# this could be put in a function
+betadisper_dat$chull <- group_by(betadisper_dat$eigenvector, group) %>%
+  do(data.frame(PCoA1 = .$PCoA1[c(chull(.$PCoA1, .$PCoA2), chull(.$PCoA1, .$PCoA2)[1])],
+                PCoA2 = .$PCoA2[c(chull(.$PCoA1, .$PCoA2), chull(.$PCoA1, .$PCoA2)[1])])) %>%
+  data.frame()
+
+# combine centroid and eigenvector dataframes for plotting
+betadisper_lines <- merge(select(betadisper_dat$centroids, group, PCoA1, PCoA2), select(betadisper_dat$eigenvector, group, PCoA1, PCoA2), by = c('group'))
+
+# add distances to eigenvector and lines data
+betadisper_lines <- mutate(betadisper_lines, distances = dist_between_points(PCoA1.x, PCoA2.x, PCoA1.y, PCoA2.y))
+betadisper_dat$eigenvector$distances <- betadisper_dat$distances$distances
+
+# plot PCoA
+p1 <- ggplot() +
+  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 5) +
+  geom_point(aes(PCoA1, PCoA2, col = group, alpha = 1 - distances), betadisper_dat$eigenvector, size = 0.75) +
+  #geom_path(aes(PCoA1, PCoA2, col = group, group = group), betadisper_dat$chull, alpha = 0.1) +
+  #geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(betadisper_lines), col = group, alpha = 1 - distances), betadisper_lines) +
+  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  stat_ellipse(aes(PCoA1, PCoA2, col = group, group = group), type = "t", betadisper_dat$eigenvector) +
+  ylab('PCoA Axis 2 [18.37%]') +
+  xlab('PCoA Axis 1 [44.31%]') +
+  theme(legend.position = 'bottom') +
+  coord_fixed(sqrt(betadisper_dat$eigenvalue$percent[2]/betadisper_dat$eigenvalue$percent[1])) +
+  ggtitle('PCoA plot with closer points emphasised') +
+  scale_alpha(range = c(0.0001, 0.75), guide = FALSE)
+
+# plot distances from centroid
+p2 <- ggplot(betadisper_dat$distances, aes(group, distances, fill = group, col = group)) +
+  geom_boxplot(aes(fill = group, col = group), outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
+  stat_summary(position = position_dodge(width = 0.55), geom = 'crossbar', fatten = 0, color = 'white', width = 0.4, fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x)))}) +
+  geom_point(aes(group, distances, col = group), shape = 21, fill ='white', position = position_jitterdodge(dodge.width = 0.55, jitter.width = 0.3)) +
+  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  ylab('Distance to centroid') +
+  theme(legend.position = 'none') +
+  xlab('') +
+  ggtitle('Distance from centroid')
+
+p3 <- p1 + p2 + plot_layout(ncol = 2, widths = c(2.5, 1))
+
+ggsave(file.path(path_fig, 'wt_vs_preadapt.pdf'), p3, height = 5, width = 10)
+
+# filter samples that are not individual clones ####
+# specifically negative control, nmc_T0 & wt_ancestor (dont care as only lacz were in the communities)
+# specifically wt ancestor and nmc_t0
+to_keep <- filter(meta_new, treatment %in% c('evolved_with_community', 'evolved_without_community', 'lacz_ancestor'))
+ps2 <- prune_samples(to_keep$SampleID, ps)
+
+# transform counts to relative abundances for ordination ####
+ps_prop <- transform_sample_counts(ps2, function(x){x / sum(x)})
+
+# Weighted Unifrac ####
+# weighted Unifrac distance
+# to change the ordination - see https://joey711.github.io/phyloseq/plot_ordination-examples.html and https://joey711.github.io/phyloseq/distance.html
+
+# do weighted unifrac
+ord_wUni <- ordinate(ps_prop, method = 'MDS', distance = 'wunifrac')
+
+evals <- ord_wUni$values$Eigenvalues
+
+# plot
+plot_ordination(ps_prop, ord_wUni, color = "n_clones") +
+  coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  facet_wrap(~ treatment)
+# plot all on one panel by removing the facet_wrap command
+
+# get the distance matrix out of the data
+ps_wunifrac <- phyloseq::distance(ps_prop, method = 'wunifrac')
+
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_prop))
+d_samp <- mutate(d_samp,
+                 n_clones_fac = as.factor(n_clones),
+                 treatment = as.factor(treatment)) %>%
+  column_to_rownames(., 'SampleID')
+
+# run an Adonis test
+mod_nclones <-  vegan::adonis(ps_wunifrac ~ n_clones_fac, data = d_samp, n_perm = 9999)
+mod_treat <-  vegan::adonis(ps_wunifrac ~ treatment, data = d_samp, n_perm = 9999)
+
+# run a multiple comparison to see which treatments are different
+mult_comp <- mctoolsr::calc_pairwise_permanovas(ps_wunifrac, d_samp, 'treatment', n_perm = 9999)
+# loads of comparisons. Significant differences will be determined by p value correction.
+
+# overwrite metadata to allow plotting of nclones_fac
+sample_data(ps_prop) <- sample_data(d_samp)
+
+# beta-diversity analysis - look at homogeneity of variances
+mod1_dispers <- betadisper(ps_wunifrac, d_samp$n_clones_fac)
+
+# plot of model
+plot(mod1_dispers)
+boxplot(mod1_dispers)
+
+# anova
+anova(mod1_dispers)
+
+# Permutation test for F
+pmod <- permutest(mod1_dispers, pairwise = TRUE)
+
+# Tukey's Honest Significant Differences
+T_HSD <- TukeyHSD(mod1_dispers)
+
+# plot distances to centroid - try and play with alpha
+
+# get betadisper data ####
+betadisper_dat <- get_betadisper_data(mod1_dispers)
+
+# do some transformations on the data
+betadisper_dat$eigenvalue <- mutate(betadisper_dat$eigenvalue, percent = eig/sum(eig)*100)
+
+# add convex hull points ####
+# this could be put in a function
+betadisper_dat$chull <- group_by(betadisper_dat$eigenvector, group) %>%
+  do(data.frame(PCoA1 = .$PCoA1[c(chull(.$PCoA1, .$PCoA2), chull(.$PCoA1, .$PCoA2)[1])],
+                PCoA2 = .$PCoA2[c(chull(.$PCoA1, .$PCoA2), chull(.$PCoA1, .$PCoA2)[1])])) %>%
+  data.frame()
+
+# combine centroid and eigenvector dataframes for plotting
+betadisper_lines <- merge(select(betadisper_dat$centroids, group, PCoA1, PCoA2), select(betadisper_dat$eigenvector, group, PCoA1, PCoA2), by = c('group'))
+
+# add distances to eigenvector and lines data
+betadisper_lines <- mutate(betadisper_lines, distances = dist_between_points(PCoA1.x, PCoA2.x, PCoA1.y, PCoA2.y))
+betadisper_dat$eigenvector$distances <- betadisper_dat$distances$distances
+
+# plot PCoA
+p1 <- ggplot() +
+  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 5) +
+  geom_point(aes(PCoA1, PCoA2, col = group, alpha = 1 - distances), betadisper_dat$eigenvector, size = 0.75) +
+  #geom_path(aes(PCoA1, PCoA2, col = group, group = group), betadisper_dat$chull, alpha = 0.1) +
+  #geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(betadisper_lines), col = group, alpha = 1 - distances), betadisper_lines) +
+  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  stat_ellipse(aes(PCoA1, PCoA2, col = group, group = group), type = "t", betadisper_dat$eigenvector) +
+  ylab('PCoA Axis 2 [19.03%]') +
+  xlab('PCoA Axis 1 [46.78%]') +
+  theme(legend.position = 'bottom') +
+  coord_fixed(sqrt(betadisper_dat$eigenvalue$percent[2]/betadisper_dat$eigenvalue$percent[1])) +
+  ggtitle('PCoA of lacz ancestor vs 24 clone preadapted mixtures') +
+  scale_alpha(range = c(0.0001, 0.75), guide = FALSE)
+
+# plot distances from centroid
+p2 <- ggplot(betadisper_dat$distances, aes(group, distances, fill = group, col = group)) +
+  geom_boxplot(aes(fill = group, col = group), outlier.shape = NA, width = 0.5, position = position_dodge(width = 0.55)) +
+  stat_summary(position = position_dodge(width = 0.55), geom = 'crossbar', fatten = 0, color = 'white', width = 0.4, fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x)))}) +
+  geom_point(aes(group, distances, col = group), shape = 21, fill ='white', position = position_jitterdodge(dodge.width = 0.55, jitter.width = 0.3)) +
+  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  ylab('Distance to centroid') +
+  theme(legend.position = 'none') +
+  xlab('') +
+  ggtitle('Distance from centroid')
+
+p3 <- p1 + p2 + plot_layout(ncol = 2, widths = c(2.5, 1))
+
+ggsave(file.path(path_fig, 'wt_vs_populations.pdf'), p3, height = 5, width = 10)
+
+
+
