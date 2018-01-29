@@ -8,78 +8,10 @@ library(tidyr)
 library(ggplot2)
 library(magrittr)
 library(vegan)
-library(gridExtra)
-library(viridis)
-library(ggridges)
 library(tibble)
 library(patchwork) # devtools::install_github('thomasp85/patchwork')
 library(ggvegan)
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
-
-# functions ####
-# code stolen from phyloseq website
-get_top_taxa <- function(ps, tax_rank, to_keep){
-  temp <- tapply(phyloseq::taxa_sums(ps), phyloseq::tax_table(ps)[, tax_rank], sum, na.rm = TRUE)
-  temp2 <-  names(sort(temp, TRUE))[1:to_keep]
-  return(temp2)
-}
-
-# get betadisper dataframes
-# have written functions to grab the necessary data from the betadisper object
-
-# getting distances from betadisper() object
-betadisper_distances <- function(model){
-  temp <- data.frame(group = model$group)
-  temp2 <- data.frame(distances = unlist(model$distances))
-  temp2$sample <- row.names(temp2)
-  temp <- cbind(temp, temp2)
-  temp <- dplyr::select(temp, group, sample, dplyr::everything())
-  row.names(temp) <- NULL
-  return(temp)
-}
-
-# getting eigenvalues out of betadisper() object
-betadisper_eigenvalue <- function(model){
-  temp <- data.frame(eig = unlist(model$eig))
-  temp$PCoA <- row.names(temp)
-  row.names(temp) <- NULL
-  return(temp)
-}
-
-# getting the eigenvectors out of a betadisper() object
-betadisper_eigenvector <- function(model){
-  temp <- data.frame(group = model$group)
-  temp2 <- data.frame(unlist(model$vectors))
-  temp2$sample <- row.names(temp2)
-  temp <- cbind(temp, temp2)
-  temp <- dplyr::select(temp, group, sample, dplyr::everything())
-  row.names(temp) <- NULL
-  return(temp)
-}
-
-# get centroids
-betadisper_centroids <- function(model){
-  temp <- data.frame(unlist(model$centroids))
-  temp$group <- row.names(temp)
-  temp <- dplyr::select(temp, group, dplyr::everything())
-  row.names(temp) <- NULL
-  return(temp)
-}
-
-# betadisper data
-get_betadisper_data <- function(model){
-  temp <- list(distances = betadisper_distances(model),
-               eigenvalue = betadisper_eigenvalue(model),
-               eigenvector = betadisper_eigenvector(model),
-               centroids = betadisper_centroids(model))
-  return(temp)
-}
-
-
-# get distance from 00
-dist_between_points <- function(x1, x2, y1, y2){
-  return(abs(sqrt((x1 - x2)^2+(y1-y2)^2)))
-}
 
 # set seed
 set.seed(42)
@@ -136,40 +68,206 @@ plot_ordination(ps_prop, ord_wUni, col = 'n_clones') +
   facet_wrap(~ preadapt_pop)
 # plot all on one panel by removing the facet_wrap command
 
-
-
 # save plot, other ways are available
 ggsave(file.path(path_fig, 'ordination.pdf'), last_plot(), height = 6, width = 12)
 
 # get the distance matrix out of the data
 ps_wunifrac <- phyloseq::distance(ps_prop, method = 'wunifrac')
+ps_bray <- phyloseq::distance(ps2, method = 'bray')
 
 # Need to do a PCoA to get the weighted unifrac distances into Euclidean space. capscale() should help with this
-pcoa <- capscale(ps_wunifrac ~ 1)
+pcoa <- capscale(ps_bray ~ 1)
+plot(pcoa)
 
+# try and get the data of the pcoa out
+d_pcoa <- fortify(pcoa) %>%
+  janitor::clean_names() %>%
+  rename(., SampleID = label) %>%
+  merge(., select(d_samp, SampleID, sample_name))
+
+# metaMDS - nmds
+nmds <- metaMDS(ps_bray)
+stressplot(nmds)
+
+d_nmds <- data.frame(scores(nmds)) %>%
+  janitor::clean_names() %>%
+  tibble::rownames_to_column(., 'SampleID') %>%
+  merge(., select(d_samp, SampleID, sample_name))
+
+# choose ordination method to use ###
+d_ord <- d_nmds
+
+# filter for just the clones
+d_ord_ind <- filter(d_ord, sample_name %in% as.character(1:48)) %>%
+  mutate(., clone = paste('C', sample_name, sep = '_'))
 
 # make a data frame of the sample data
 d_samp <- data.frame(sample_data(ps_prop))
-d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
-                 nclones_fac = as.factor(nclones_fac)) %>%
-  column_to_rownames(., 'SampleID')
+d_samp_ind <- filter(d_samp, treatment == 'individual_clone')
+d_samp_4 <- filter(d_samp, treatment != 'individual_clone')
 
-# run an Adonis test
-mod_nclone <- vegan::adonis(ps_wunifrac ~ n_clones, data = d_samp, n_perm = 9999)
-mod_nclonefac <-  vegan::adonis(ps_wunifrac ~ nclones_fac, data = d_samp, n_perm = 9999)
+# create column for clone
+d_samp_ind <- mutate(d_samp_ind, clone = paste('C', sample_name, sep = '_')) %>%
+  mutate(., rep = group_indices(., preadapt_pop),
+         evol = 'related')
 
-# run a multiple comparison to see which treatments are different
-mult_comp <- mctoolsr::calc_pairwise_permanovas(ps_wunifrac, d_samp, 'nclones_fac', n_perm = 9999)
-# loads of comparisons. Significant differences will be determined by p value correction.
+# get every combination used in the experiment
 
-# overwrite metadata to allow plotting of nclones_fac
-sample_data(ps_prop) <- sample_data(d_samp)
+# read in mixed population data
+d_samp_4_ind <- read.csv('sequencing/data/Mixed_population_data.csv', stringsAsFactors = FALSE) %>%
+  janitor::clean_names() %>%
+  mutate(., clone = paste('C', clone, sep = '_'),
+         rep = group_indices(., preadaptation_population),
+         preadapt_pop = preadaptation_population,
+         evol = 'unrelated') %>%
+  select(., -preadaptation_population)
 
-# plot ordination
-plot_ordination(ps_prop, ord_wUni, color = "nclones_fac", shape = 'treatment') +
-  geom_point(size = 2) +
-  scale_shape_discrete('Treatment') +
-  stat_ellipse(aes(fill = nclones_fac, group = nclones_fac), geom = 'polygon', type = "t", alpha = 0.05) +
-  theme_bw(base_size = 10, base_family = 'Helvetica') +
-  ylab('PCoA2 [18.4%]') +
-  xlab('PCoA1 [44.2%]')
+# bind with d_samp_ind
+d_ind_combs <- rbind(select(d_samp_ind, sample_name, clone, rep, preadapt_pop, evol),
+                     d_samp_4_ind)
+# This is good
+
+# merge PCoA axes with clone
+d_ord_ind <- merge(d_ind_combs, select(d_ord_ind, c(clone, contains('mds'))), by = 'clone', all.x = TRUE)
+# This seems to have worked
+
+# add a unique ID for each population
+d_ord_ind <- mutate(d_ord_ind, rep2 = case_when(sample_name %in% as.character(1:48) ~ preadapt_pop,
+                                                  TRUE ~ sample_name))
+
+# calculate centroid of each population - using the "mediod" as this is the method used in beta_disper, could just as easily get the mean
+
+cols <- Hmisc::Cs(mds1, mds2, mds3, mds4, mds5, mds6, nmds1, nmds2)
+
+d_ord_centroids <- group_by(d_ord_ind, rep2) %>%
+  summarise_at(., vars(contains('mds')), median) %>%
+  ungroup()
+
+# filter just the 4 clones of the pcoa
+d_ord_4 <- filter(d_ord, ! SampleID %in% as.character(1:48)) %>%
+  merge(., select(d_samp_4, SampleID, preadapt_pop), by = 'SampleID') %>%
+  mutate(., rep2 = case_when(is.na(preadapt_pop) ~ sample_name,
+                             TRUE ~ preadapt_pop)) %>%
+  select(., -preadapt_pop)
+
+# first plot
+ggplot(d_ord_ind, aes(nmds1, nmds2)) +
+  geom_point() +
+  geom_point(data = d_ord_centroids, col = 'red', size = 2.5) +
+  geom_point(data = d_ord_4, col = 'blue', shape = 2) +
+  facet_wrap(~ rep2)
+
+# calculate average distance between centroid and corresponding sample ####
+ 
+# for WT-B6 there is no sample of the four clones together
+# delete WT-B6 from list
+
+id <- unique(d_ord_ind$rep2)
+id <- id[id != 'WT-B6']
+
+# distance is calculated as
+# sqrt(sum((x_i - y_i)^2)) - Euclidean distance
+
+d_ord_centroids <- mutate(d_ord_centroids, samp = 'centroid')
+d_ord_4 <- mutate(d_ord_4, samp = '4_clones')
+
+common_cols <- intersect(colnames(d_ord_centroids), colnames(d_ord_4))
+
+# bind centroid and common columns together
+d_dist <- bind_rows(select(d_ord_4, common_cols), select(d_ord_centroids, common_cols))
+
+# get rid of data which cannot be used for comparison
+d_dist <- filter(d_dist, rep2 != 'WT-B6')
+
+d_dist_sum <- gather(d_dist, 'eigenvector', 'value', contains('mds')) %>%
+  spread(., samp, value) %>%
+  group_by(., rep2, eigenvector) %>%
+  summarise(., dist = (`4_clones` - centroid)^2) %>%
+  ungroup() %>%
+  group_by(., rep2) %>%
+  summarise(., distance = sqrt(sum(dist))) %>%
+  ungroup()
+
+# average distance of actual samples and replicates
+actual_dist = mean(d_dist_sum$distance, na.rm = TRUE)  
+
+# permute this distance many many times ####
+
+# number of permutations
+n_perm = 9999
+
+# create empty vector
+perm_dist <- rep(NA, times = n_perm)
+
+# set progress bar
+pb <- progress::progress_bar$new(total = n_perm, clear = FALSE)
+
+# run for loop for shuffling
+for(i in 1:n_perm){
+  
+  # progress bar
+  pb$tick()
+  # shuffle up the samples, randomly within centroids and 4 clones respectively (I think)
+  # while keeping all the mds' the same
+  d_dist_temp <- group_by(d_dist, samp) %>%
+    mutate(., rep2 = sample(rep2, replace = FALSE)) %>%
+    ungroup()
+  
+  # run the code to calculate Euclidean distance
+  d_dist_sum_temp <- gather(d_dist_temp, 'eigenvector', 'value', contains('mds')) %>%
+    spread(., samp, value) %>%
+    group_by(., rep2, eigenvector) %>%
+    summarise(., dist = (`4_clones` - centroid)^2) %>%
+    ungroup() %>%
+    group_by(., rep2) %>%
+    summarise(., distance = sqrt(sum(dist))) %>%
+    ungroup()
+  
+  # save out the mean distance between centroid and 4 clone performance
+  perm_dist[i] <- mean(d_dist_sum_temp$distance, na.rm = TRUE)
+  
+  # remove unwanted objects
+  rm(list = c('d_dist_temp', 'd_dist_sum_temp'))
+}
+
+# plot this ####
+
+# second plot
+ggplot(d_ord_ind, aes(nmds1, nmds2)) +
+  geom_point(size = 0.5) +
+  geom_point(aes(shape = samp), data = d_dist, col = 'red', size = 2.5) +
+  geom_line(aes(group = rep2), data = d_dist, col = 'red', alpha = 0.5) +
+  theme(legend.position = c(0.9, 0.9)) +
+  coord_equal()
+
+# plot with facets
+p1 <- ggplot(d_ord_ind, aes(nmds1, nmds2)) +
+  geom_point(size = 0.5) +
+  geom_point(aes(shape = samp), data = d_dist, col = 'red', size = 2.5) +
+  geom_line(aes(group = rep2), data = d_dist, col = 'red', alpha = 0.5) +
+  theme(legend.position = 'none') +
+  coord_equal()+
+  facet_wrap(~rep2) +
+  ggtitle('Position of each replicate in euclidean space based on an NMDS',
+          subtitle = 'Red circles are 4 clone responses, triangles are centroid positions') +
+  theme_bw()
+
+d_perm_dist = data.frame(n_perm = 1:n_perm, dist = perm_dist)
+
+p2 <- ggplot(d_perm_dist, aes(dist)) +
+  geom_histogram(fill = 'white', col = 'black') +
+  geom_vline(aes(xintercept = actual_dist), col = 'red') +
+  xlab('Euclidean distance between two points') +
+  ggtitle('Permuted euclidean distance between centroid of 4 individual clones and actual effect of 4 clones',
+          subtitle = 'Red line is average distance of actual measured data')
+
+# calculate permuted p-value ####
+# How many distances are less than the true distance
+# p = sum(perm_dist - actual_dist < 0) /n_perm + 1
+sum(perm_dist - actual_dist < 0) /(n_perm + 1)
+
+# with NMDS, the pvalue = 0.1149
+p3 <- p1 + p2
+p3
+
+ggsave(file.path(path_fig, 'predict_multiclones.pdf'), p3, height = 8, width = 13)
