@@ -13,6 +13,7 @@ library(viridis)
 library(ggridges)
 library(tibble)
 library(patchwork) # devtools::install_github('thomasp85/patchwork')
+library(ggvegan)
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
 # functions ####
