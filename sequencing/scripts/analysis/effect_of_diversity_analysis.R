@@ -88,7 +88,7 @@ path_fig <- 'sequencing/plots'
 
 # load data - latest run which we are happy with ####
 # these files need to be there
-ps <- readRDS('sequencing/data/output/20171024_17:18/20171024_17:18_ps.rds')
+ps <- readRDS('sequencing/data/output/20171024_17:18/ps_no_NA_phyla.rds')
 
 # replace metadata with new metadata
 # when wanting to add columns to metadata, it is better to edit metadata_creation and overwrite the metadata file as then it can be overwritten in all future files
@@ -101,7 +101,7 @@ rank_names(ps)
 
 # look at the number of reads per sample
 sample_sums(ps)
-min(sample_sums(ps)) # min of 30,000. Woof.
+min(sample_sums(ps)) # min of 28,000. Woof.
 
 # not going to rarefy those samples yet
 
@@ -113,6 +113,20 @@ min(sample_sums(ps)) # min of 30,000. Woof.
 # specifically wt ancestor and nmc_t0
 to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', 'negative_control', 'wt_ancestor'))
 ps2 <- prune_samples(to_keep$SampleID, ps)
+
+# remove Pseudomonas reads from the analysis ####
+# have a look at number of genus 
+table(tax_table(ps2)[, "Genus"], exclude = NULL)
+# have a look at Pseudomonas more closely
+d_pseu <- transform_sample_counts(ps2, function(x){x / sum(x)}) %>%
+  subset_taxa(., Genus == 'Pseudomonas') %>%
+  psmelt() %>%
+  group_by(SampleID) %>%
+  summarise(prop = sum(Abundance))
+# no species so delete all pseudomonas samples from data
+
+# remove pseudomonas
+ps2 <- subset_taxa(ps2, Genus != 'Pseudomonas')
 
 # transform counts to relative abundances for ordination ####
 ps_prop <- transform_sample_counts(ps2, function(x){x / sum(x)})
@@ -164,8 +178,8 @@ plot_ordination(ps_prop, ord_wUni, color = "nclones_fac", shape = 'treatment') +
   scale_shape_discrete('Treatment') +
   stat_ellipse(aes(fill = nclones_fac, group = nclones_fac), geom = 'polygon', type = "t", alpha = 0.05) +
   theme_bw(base_size = 10, base_family = 'Helvetica') +
-  ylab('PCoA2 [18.4%]') +
-  xlab('PCoA1 [44.2%]')
+  ylab('PCoA2 [23%]') +
+  xlab('PCoA1 [45.9%]')
 
 # beta-diversity analysis - look at homogeneity of variances
 mod1_dispers <- betadisper(ps_wunifrac, d_samp$nclones_fac)

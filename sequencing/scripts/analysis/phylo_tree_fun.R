@@ -36,6 +36,9 @@ psraw_tree <- plot_tree(ps, method = "treeonly",
 ps0 <- subset_taxa(ps, !is.na(Phylum))
 table(tax_table(ps0)[, "Phylum"], exclude = NULL)
 
+# save
+saveRDS(ps0, 'sequencing/data/output/20171024_17:18/ps_no_NA_phyla.rds')
+
 # plot this tree
 ps0_tree <- plot_tree(ps0, method = "treeonly",
           ladderize = "left",
