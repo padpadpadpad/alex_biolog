@@ -6,7 +6,7 @@ library(bayesplot)
 library(brms)
 library(ggplot2)
 library(rstanarm)
-library(tidybayes)
+library(tidybayes) # devtools::install_github('mjskay/tidybayes')
 
 # set up model
 model_bf <- bf(log.bet ~ Age*Sex + AgeSq*Sex + as.factor(TtI) + Community.Size + (1|Year) + (1 | ID), zi ~ Age*Sex + AgeSq*Sex + as.factor(TtI) + Community.Size + (1|Year) + (1 | ID))
