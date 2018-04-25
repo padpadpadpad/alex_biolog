@@ -61,33 +61,27 @@ ggplot(d, aes(disturb_current, post_competitor)) +
   geom_point() +
   facet_wrap(~ id, ncol = 6)
 
-# try normal glmm
-# fit_glm <- glm(post_competitor ~ disturb_past*disturb_current, family = 'quasipoisson', d)
-
-# try brms for count data ####
+# try brms for binomial data ####
 # set up model
-model_bf <- bf(post_competitor ~ disturb_past*disturb_current + (1|id), 
-               zi ~ 1 + (1|id))
 
-# run model
-model_brms <- brm(model_bf, 
-                   data = d, 
-                   family = zero_inflated_poisson,
-                   chains = 3,
-                   iter = 10000)
+# make disturb_past and disturb_current factors
+d <- mutate_at(d, c('disturb_past', 'disturb_current'), as.factor)
 
-# summary of model
-summary(model_brms)
-
-plot(marginal_effects(model_brms), ask = FALSE)
+# glm
+model_glm <- glm(pres_abs ~ disturb_past*disturb_current, d, family = 'quasibinomial')
+model_glm2 <- glm(pres_abs ~ disturb_past+disturb_current, d, family = 'quasibinomial')
+model_glm3 <- glm(pres_abs ~ disturb_past, d, family = 'quasibinomial')
+anova(model_glm2, model_glm3, test = 'Chisq')
+anova(model_glm3, test = 'Chisq')
 
 # try brms for binomial regression
-model_bf <- bf(pres_abs ~ as.factor(disturb_past)*disturb_current + (1|id))
+model_bf <- bf(pres_abs ~ disturb_past*disturb_current,
+               zi ~ disturb_past*disturb_current)
 
 # run model
 model_brms <- brm(model_bf, 
                   data = d, 
-                  family = bernoulli,
+                  family = zero_inflated_binomial,
                   chains = 3,
                   iter = 10000)
 
