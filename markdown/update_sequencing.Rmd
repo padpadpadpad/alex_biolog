@@ -1,0 +1,119 @@
+---
+title: "Update on pre-adaptation experiment"
+author: "Daniel Padfield"
+date: "24/07/2018"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+---
+
+## Experiment Overview
+
+A master's student did a big experiment looking at the effect of pre-adaptation and diversity of a focal species on community composition. The experiment was done in soil using a LacZ marked strain of _Pseudomonas fluorescens_.
+
+Some _Pseudomonas fluorescens_ were pre-adapted to the compost before being put into experimental microcosms with the resident community. Clones were then isolated from these pre-adaptation treatments by plating onto LacZ agar. They were then left for 6 weeks and at the end of the experiment all samples were squenced using Amplicon 16S sequencing. They got put through a sequencing pipeline using dada2 in R and the phylogenetic tree was constructed using Fasttree.
+
+To tease apart pre-adaptation and diversity, there were a variety of treatments:
+
+- 4 related clones: addition of 4 clones that were from the same focal population. These were either evolved with and without the community. 
+- 4 unrelated clones: addition of 4 clones that were from the same focal population. These were mixed from populations evolved with and without the community.
+- evolved with community: the addition of 24 clones evolved with the resident community
+- evolved without community: the additions of 24 clones evolved without the resident community
+- individual clone: the addition of a single to the resident community, could have been evolved with and without the community. In addition, each clone came from 1 of 12 replicate populations.
+
+### Table summary of the experimental setup and treatments
+
+```{r data}
+d <- tibble::tibble(treatment = c("individual_clone", "individual_clone", "4_related_clones", "4_related_clones", "4_unrelated_clones",  "evolved_without_community", "evolved_with_community", "lacz_ancestor", "negative_control", "nmc_t0"),
+            evolved_with_community = c('yes', 'no', 'yes', 'no', 'NA', 'no', 'yes', 'no', 'NA', 'NA'),
+            reps = c(24, 24, 6, 6, 12, 6, 6, 6, 6, 1))
+knitr::kable(d)
+```
+
+You can see that this is a somewhat unbalanced design, but as we are using permutational tests this should be ok (I think).
+
+## Looking at changes in community composition
+
+__1. Looked at whether Pseudomonas fluorescens persists in the treatments__
+
+- _P. fluorescens_ persists in all treatments. The negative control has the highest level of _P fluorescens across_ all treatments, around 5% of all reads. Other samples have anywhere from <1 to 10% of reads
+- The natural microbial community (sequenced before the experiment) has very low levels of _Pseudomonas_ (0.0002 % of total reads)
+
+```{r echo = TRUE, out.width="80%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/prop_pseudomonas.png'))
+```
+
+__2. Look at changes in community composition with preadaptation history and diversity of Pseudomonas fluorescens__
+
+Next we looked at how community composition may change with diversity and with preadaptation history (with and without the resident community). To do this we kept only `4_related_clones`, `individual_clone` and `evolved_with_community` and `evolved_without_community` to give us a fully factorial design of treatments. We dropped factors that had no pre-adaptation stage (`lacz_ancestor`) and that were mixed between evolved with and without the community (`4_unrelated_clones`) and that had no additional _Pseudomonas fluorescens_ added (`negative_control`).
+
+- run separate analyses on 1 clone, 4 clone and 24 clone. Separate permutational ANOVAS on each allow for an effect of pre-adaptation history to be considered, regardless of the impact of having many more individual clone replicates than the other levels of diversity
+    - none of these had a significant effect of pre-adaptation history on the position of the centroid
+    - did explain an ok amount of variation in the 24 clones, high diversity sample (14%)
+    - plotted preadaptation context across different levels of diversity. Ran `betadisper()` on a global model to get centroids
+    - always had natural microbial community and lacz ancestor to show that higher diversity moves closer towards the natural microbial community, where diversity is presumably higher.
+    
+    
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/effect_of_evol_history.png'))
+```
+
+__3. Look specifically at diversity to see if diversity of clones changes the impact on the community__
+
+Because there seems to be an effect of diversity overall, higher diversity is closer to the natural microbial community and individual clone is closer to the lacz ancestor, we looked at changes in the position of centroids across levels of diversity (number of clones)
+
+Had several different levels:
+
+- `C_1` are the single clones, including the lacz ancestors
+- `C_4` are the 4 clone treatments, both related and unrelated
+- `C_24` are the 24 clone treatments, both evolved with and without the community
+- `C_high` are the negative control, the nmc after the treatment
+
+```{r echo = TRUE}
+d <- readRDS('../sequencing/data/output/mult_comp.rds')
+
+knitr::kable(d)
+```
+
+Single clones are change community composition differently to the negative control and the 24 clone samples. There are no other significant differences in community composition with levels of diversity.
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/PCoA_plot_diversity.png'))
+```
+
+## Look at changes in alpha diversity across levels of preadaptation history and diversity
+
+- Can also look at how alpha diversity changes with preadaptaion history and diversity
+
+Calculated loads of diversity metrics (i.e. Shannon, Simpsons, Observed OTU) and pielou's evenness.
+
+__1. Look at how diversity and evenness change through treatments__
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/alpha_diversity.png'))
+```
+
+Alpha diversity seems a bit weird. Richness is largest in `nmc_t0` (makes sense), but the negative control has the biggest reduction in observed OTUs (alongside `evolved_without_community`).
+
+Not what to make of this...
+
+## Other Qs answered previously and possible avenues to go down
+
+- Demonstrated Pedro's work is still applicable. There is a significant change in community composition between lacz ancestor and 24 clones preadapted
+- Looked at whether fitness of individual clones correlates with weighted Unifrac distance to lacz ancestor and negative control. Answer is no.
+- Looked at whether any preadaptation history impacts fitness. yes it does but not sure this is very meaningful.
+- Looked at whether position of centroid of 4 related clones predicts the position of the actual point of the 4 related clones. It does not.
+- Look at any significant changes in proportional abundance between treatments
+- Look to see if you show the loadings of the different genus/order etc on an nmds plot (have achieved this previously). Does not change any of the analyses.
+- Biolog plates need redoing. Read some biolog papers to make sure methods are correct.
+
+## Extra plots
+
+```{r echo = TRUE, out.width="80%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/ind_clone_fitness.png'))
+```
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/predict_multiclones.png'))
+```

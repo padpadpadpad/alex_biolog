@@ -13,6 +13,8 @@ library(viridis)
 library(ggridges)
 library(tibble)
 library(patchwork) # devtools::install_github('thomasp85/patchwork')
+library(ggConvexHull)
+library(lme4)
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
 # functions ####
@@ -74,7 +76,6 @@ get_betadisper_data <- function(model){
   return(temp)
 }
 
-
 # get distance from 00
 dist_between_points <- function(x1, x2, y1, y2){
   return(abs(sqrt((x1 - x2)^2+(y1-y2)^2)))
@@ -84,7 +85,7 @@ dist_between_points <- function(x1, x2, y1, y2){
 set.seed(42)
 
 # figure path
-path_fig <- 'sequencing/plots'
+path_fig <- 'sequencing/plots/fresh'
 
 # load data - latest run which we are happy with ####
 # these files need to be there
@@ -111,75 +112,247 @@ min(sample_sums(ps)) # min of 28,000. Woof.
 # filter some samples with NA for n_clones ####
 # specifically negative control, nmc_T0 & wt_ancestor (dont care as only lacz were in the communities)
 # specifically wt ancestor and nmc_t0
-to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', 'negative_control', 'wt_ancestor'))
+to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', 'wt_ancestor'))
 ps2 <- prune_samples(to_keep$SampleID, ps)
 
 # remove Pseudomonas reads from the analysis ####
+
 # have a look at number of genus 
 table(tax_table(ps2)[, "Genus"], exclude = NULL)
+
 # have a look at Pseudomonas more closely
 d_pseu <- transform_sample_counts(ps2, function(x){x / sum(x)}) %>%
   subset_taxa(., Genus == 'Pseudomonas') %>%
   psmelt() %>%
-  group_by(SampleID) %>%
+  group_by(SampleID, treatment, evolution, preadapt_pop) %>%
   summarise(prop = sum(Abundance))
+
 # no species so delete all pseudomonas samples from data
-
-# remove pseudomonas
-ps2 <- subset_taxa(ps2, Genus != 'Pseudomonas')
-
-# transform counts to relative abundances for ordination ####
-ps_prop <- transform_sample_counts(ps2, function(x){x / sum(x)})
-
-# Weighted Unifrac ####
-# weighted Unifrac distance
-# to change the ordination - see https://joey711.github.io/phyloseq/plot_ordination-examples.html and https://joey711.github.io/phyloseq/distance.html
-
-# do weighted unifrac
-ord_wUni <- ordinate(ps_prop, method = 'MDS', distance = 'wunifrac')
-
-evals <- ord_wUni$values$Eigenvalues
-
-# plot
-plot_ordination(ps_prop, ord_wUni, color = "treatment") +
-  coord_fixed(sqrt(evals[2] / evals[1])) +
-  geom_point(size = 2) +
-  theme_bw(base_size = 14, base_family = 'Helvetica') +
-  ggtitle('PCoA plot based on weighted Unifrac distances') +
-  facet_wrap(~ treatment)
-# plot all on one panel by removing the facet_wrap command
+# plot proportion of abundance of pseudomonas across treatments
+ggplot(d_pseu, aes(treatment, prop)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(shape = 21, fill = 'white', size = 3, position = position_jitter(width = 0.1, height = 0)) +
+  theme_bw(base_size = 14) +
+  ylab('Proportion of total reads') +
+  xlab('Treatment') +
+  theme(axis.text.x = element_text(angle =45, hjust = 1)) +
+  ggtitle('Proportion of Pseudomonas reads in sample',
+          subtitle = 'No spp assignment for Pseudomonas so all Pseudomonas reads clumped together')
 
 # save plot, other ways are available
-ggsave(file.path(path_fig, 'ordination.pdf'), last_plot(), height = 6, width = 12)
+ggsave(file.path(path_fig, 'prop_pseudomonas.png'), last_plot(), height = 6, width = 8)
+
+# do analysis on effect of diversity and preadaptation with and without focal community ####
+
+# have this perfectly replicated for 1, 4 and 24 clones
+# haver to do these separately because of nesting in the individual clone treatment
+
+# 1. individual clones ####
+
+# samples to keep - just individual clones
+to_keep <- filter(meta_new, treatment %in% c('individual_clone'))
+ps_sub <- prune_samples(to_keep$SampleID, ps)
+
+# remove Pseudomonas reads
+ps_sub <- subset_taxa(ps_sub, Genus != 'Pseudomonas')
+
+# transform counts to relative abundances for ordination
+ps_sub_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
+
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_sub_prop))
+d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
+                 nclones_fac = as.factor(nclones_fac),
+                 evol_fac = as.factor(evolution),
+                 preadapt_pop = as.factor(preadapt_pop)) %>%
+  column_to_rownames(., 'SampleID')
+
+# calculate distance matrix
+ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
+
+# run an Adonis test
+# tried using strata to shuffle within across but not within replicates within each treatment
+# not right atm, but no effect anyway
+mod_div_1 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
+mod_betadisper_1 <- betadisper(ps_wunifrac, d_samp$evol_fac)
+
+# 2. 4 related clones ####
+
+# filter treatments to keep
+to_keep <- filter(meta_new, treatment %in% c('4_related_clones'))
+ps_sub <- prune_samples(to_keep$SampleID, ps)
+
+# remove Pseudomonas reads
+ps_sub <- subset_taxa(ps_sub, Genus != 'Pseudomonas')
+
+# transform counts to relative abundances for ordination
+# cannot really find that much consenses on either side of the argument
+# whether or not to do this appears to be a little controversial still
+ps_sub_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
+
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_sub_prop))
+d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
+                 nclones_fac = as.factor(nclones_fac),
+                 evol_fac = as.factor(evolution)) %>%
+  column_to_rownames(., 'SampleID')
+
+# calculate distance matrix
+ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
+
+# run an Adonis test
+mod_div_4 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
+mod_betadisper_4 <- betadisper(ps_wunifrac, d_samp$evol_fac)
+
+# 3. 24 related clones ####
+
+# filter samples to keep
+to_keep <- filter(meta_new, treatment %in% c('evolved_with_community', 'evolved_without_community'))
+ps_sub <- prune_samples(to_keep$SampleID, ps)
+
+# remove Pseudomonas reads
+ps_sub <- subset_taxa(ps_sub, Genus != 'Pseudomonas')
+
+# transform counts to relative abundances for ordination
+ps_sub_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
+
+# do an adonis
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_sub_prop))
+d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
+                 nclones_fac = as.factor(nclones_fac),
+                 evol_fac = as.factor(evolution)) %>%
+  column_to_rownames(., 'SampleID')
+
+# calculate distance matrix
+ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
+
+# run an Adonis test
+mod_div_24 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
+mod_betadisper_24 <- betadisper(ps_wunifrac, d_samp$evol_fac)
+
+# Figure 1, looking at effect of pre-adaptation context across different levels of diversity ####
+
+# Make big plot and then grab the data
+to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', '4_unrelated_clones',  'wt_ancestor'))
+
+ps_sub <- prune_samples(to_keep$SampleID, ps)
+
+# remove Pseudomonas reads
+ps_sub <- subset_taxa(ps_sub, Genus != 'Pseudomonas')
+
+# transform counts to relative abundances for ordination
+ps_sub_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
+
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_sub_prop))
+d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
+                 nclones_fac = as.factor(nclones_fac),
+                 evol_fac = as.factor(evolution)) %>%
+  column_to_rownames(., 'SampleID') %>%
+  unite(., 'id', nclones_fac, evol_fac, sep = ':')
+
+# calculate distance matrix
+ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
+
+# run a betadisper
+mod_betadisper <- betadisper(ps_wunifrac, d_samp$id)
+
+# grab centroids and other data
+d_fig1 <- get_betadisper_data(mod_betadisper)
+
+# combine centroid and eigenvector dataframes for plotting
+betadisper_lines <- merge(select(d_fig1$centroids, group, PCoA1, PCoA2), select(d_fig1$eigenvector, group, PCoA1, PCoA2), by = c('group'))
+
+# add distances to eigenvector and lines data
+betadisper_lines <- mutate(betadisper_lines, distances = dist_between_points(PCoA1.x, PCoA2.x, PCoA1.y, PCoA2.y))
+d_fig1$eigenvector$distances <- d_fig1$distances$distances
+
+# split up group into clones and evolution context
+betadisper_lines <- separate(betadisper_lines, group, c('nclones', 'evol'), sep =':') %>%
+  mutate(., evol = case_when(evol == 'NA' & nclones == 'C_1' ~ 'lacz_ancestor',
+                             nclones == 'C_high' ~ 'negative_control',
+                             TRUE ~ evol),
+         nclones =forcats::fct_relevel(nclones,
+                                   "C_1", "C_4", "C_24"))
+d_fig1$centroids <- separate(d_fig1$centroids, group, c('nclones', 'evol'), sep =':') %>%
+  mutate(., evol = case_when(evol == 'NA' & nclones == 'C_1' ~ 'lacz_ancestor',
+                             nclones == 'C_high' ~ 'negative_control',
+                             TRUE ~ evol),
+         nclones =forcats::fct_relevel(nclones,
+                                       "C_1", "C_4", "C_24"))
+d_fig1$eigenvector <- separate(d_fig1$eigenvector, group, c('nclones', 'evol'), sep =':') %>%
+  mutate(., evol = case_when(evol == 'NA' & nclones == 'C_1' ~ 'lacz_ancestor',
+                             nclones == 'C_high' ~ 'negative_control',
+                             TRUE ~ evol),
+         nclones =forcats::fct_relevel(nclones,
+                                       "C_1", "C_4", "C_24"))
+
+# plot PCoA
+fig1 <- ggplot() +
+  geom_point(aes(PCoA1, PCoA2, alpha = 1 - distances), select(filter(d_fig1$eigenvector, evol %in% c('negative_control')), -nclones), size = 0.75, col = 'blue') +
+  geom_point(aes(PCoA1, PCoA2), select(filter(d_fig1$centroids, evol %in% c('negative_control')), -nclones), size = 5, col = 'blue') +
+  geom_point(aes(PCoA1, PCoA2, alpha = 1 - distances), select(filter(d_fig1$eigenvector, evol %in% c('lacz_ancestor')), -nclones), size = 0.75, col = 'orange') +
+  geom_point(aes(PCoA1, PCoA2), select(filter(d_fig1$centroids, evol %in% c('lacz_ancestor')), -nclones), size = 5, col = 'orange') +
+  geom_point(aes(PCoA1, PCoA2, col = evol, alpha = 1 - distances), filter(d_fig1$eigenvector, ! evol %in% c('lacz_ancestor', 'negative_control')), size = 0.75) +
+  geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(filter(betadisper_lines, ! evol %in% c('lacz_ancestor', 'negative_control'))), col = evol, alpha = 1 - distances), filter(betadisper_lines, ! evol %in% c('lacz_ancestor', 'negative_control'))) +
+  geom_point(aes(PCoA1, PCoA2, col = evol), filter(d_fig1$centroids, ! evol %in% c('lacz_ancestor', 'negative_control')), size = 5) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ylab('PCoA Axis 2') +
+  xlab('PCoA Axis 1') +
+  theme(legend.position = 'bottom') +
+  facet_wrap(~ nclones) +
+  ggtitle('PCoA of the effect of preadaptation history across different levels of diversity',
+          subtitle = 'blue points are the nmc, orange are lacz ancestor') +
+  scale_alpha(range = c(0.0001, 0.75), guide = FALSE) +
+  scale_color_manual('', values = c('grey', 'black'))
+
+# save plot, other ways are available
+ggsave(file.path(path_fig, 'effect_of_evol_history.png'), last_plot(), height = 6, width = 12)
+
+
+#-----------------------------------------------------------------------#
+# Weighted Unifrac just on diversity, ignoring preadaptation context ####
+#-----------------------------------------------------------------------#
+
+# change some values of nclones
+meta_new <- sample_data(ps) %>% data.frame() %>%
+  mutate(., n_clones = paste('C_', n_clones, sep = ''))
+row.names(meta_new) <- meta_new$SampleID
+sample_data(ps) <- sample_data(meta_new)
+
+# filter samples
+to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0',  'wt_ancestor'))
+ps_sub <- prune_samples(to_keep$SampleID, ps)
+
+# remove Pseudomonas reads
+ps_sub <- subset_taxa(ps_sub, Genus != 'Pseudomonas')
+
+# make counts proportions
+ps_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
 
 # get the distance matrix out of the data
 ps_wunifrac <- phyloseq::distance(ps_prop, method = 'wunifrac')
 
 # make a data frame of the sample data
 d_samp <- data.frame(sample_data(ps_prop))
-d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
-                 nclones_fac = as.factor(nclones_fac)) %>%
+d_samp <- mutate(d_samp,
+                 nclones_fac = as.factor(n_clones)) %>%
   column_to_rownames(., 'SampleID')
 
 # run an Adonis test
-mod_nclone <- vegan::adonis(ps_wunifrac ~ n_clones, data = d_samp, n_perm = 9999)
 mod_nclonefac <-  vegan::adonis(ps_wunifrac ~ nclones_fac, data = d_samp, n_perm = 9999)
 
 # run a multiple comparison to see which treatments are different
-mult_comp <- mctoolsr::calc_pairwise_permanovas(ps_wunifrac, d_samp, 'nclones_fac', n_perm = 9999)
+mult_comp <- mctoolsr::calc_pairwise_permanovas(ps_wunifrac, d_samp, 'nclones_fac', n_perm = 9999) %>%
+  mutate(., pvalHolm = p.adjust(pval, method = 'holm'))
+
+# save dataset out
+saveRDS(mult_comp, 'sequencing/data/output/mult_comp.rds')
 # loads of comparisons. Significant differences will be determined by p value correction.
 
 # overwrite metadata to allow plotting of nclones_fac
 sample_data(ps_prop) <- sample_data(d_samp)
-
-# plot ordination
-plot_ordination(ps_prop, ord_wUni, color = "nclones_fac", shape = 'treatment') +
-  geom_point(size = 2) +
-  scale_shape_discrete('Treatment') +
-  stat_ellipse(aes(fill = nclones_fac, group = nclones_fac), geom = 'polygon', type = "t", alpha = 0.05) +
-  theme_bw(base_size = 10, base_family = 'Helvetica') +
-  ylab('PCoA2 [23%]') +
-  xlab('PCoA1 [45.9%]')
 
 # beta-diversity analysis - look at homogeneity of variances
 mod1_dispers <- betadisper(ps_wunifrac, d_samp$nclones_fac)
@@ -205,13 +378,6 @@ betadisper_dat <- get_betadisper_data(mod1_dispers)
 # do some transformations on the data
 betadisper_dat$eigenvalue <- mutate(betadisper_dat$eigenvalue, percent = eig/sum(eig)*100)
 
-# add convex hull points ####
-# this could be put in a function
-betadisper_dat$chull <- group_by(betadisper_dat$eigenvector, group) %>%
-  do(data.frame(PCoA1 = .$PCoA1[c(chull(.$PCoA1, .$PCoA2), chull(.$PCoA1, .$PCoA2)[1])],
-                PCoA2 = .$PCoA2[c(chull(.$PCoA1, .$PCoA2), chull(.$PCoA1, .$PCoA2)[1])])) %>%
-  data.frame()
-
 # combine centroid and eigenvector dataframes for plotting
 betadisper_lines <- merge(select(betadisper_dat$centroids, group, PCoA1, PCoA2), select(betadisper_dat$eigenvector, group, PCoA1, PCoA2), by = c('group'))
 
@@ -221,17 +387,17 @@ betadisper_dat$eigenvector$distances <- betadisper_dat$distances$distances
 
 # plot PCoA
 p1 <- ggplot() +
-  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 5) +
   geom_point(aes(PCoA1, PCoA2, col = group, alpha = 1 - distances), betadisper_dat$eigenvector, size = 0.75) +
   #geom_path(aes(PCoA1, PCoA2, col = group, group = group), betadisper_dat$chull, alpha = 0.1) +
   #geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(betadisper_lines), col = group, alpha = 1 - distances), betadisper_lines) +
-  theme_bw(base_size = 12, base_family = 'Helvetica') +
   stat_ellipse(aes(PCoA1, PCoA2, col = group, group = group), type = "t", betadisper_dat$eigenvector) +
-  ylab('PCoA Axis 2 [18.37%]') +
-  xlab('PCoA Axis 1 [44.31%]') +
+  geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 5) +
+  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  ylab('PCoA Axis 2') +
+  xlab('PCoA Axis 1') +
   theme(legend.position = 'bottom') +
   coord_fixed(sqrt(betadisper_dat$eigenvalue$percent[2]/betadisper_dat$eigenvalue$percent[1])) +
-  ggtitle('PCoA plot with closer points emphasised') +
+  ggtitle('PCoA plot looking at the effect of diversity') +
   scale_alpha(range = c(0.0001, 0.75), guide = FALSE)
 
 # plot distances from centroid
@@ -243,11 +409,93 @@ p2 <- ggplot(betadisper_dat$distances, aes(forcats::fct_relevel(group, 'C_24', a
   ylab('Distance to centroid') +
   theme(legend.position = 'none') +
   xlab('') +
-  ggtitle('Distance from centroid')
+  ggtitle('Distance to centroid across diversity')
 
 p3 <- p1 + p2 + plot_layout(ncol = 2, widths = c(2.5, 1))
 
-ggsave(file.path(path_fig, 'PCoA_plot_diversity.pdf'), p3, height = 5, width = 10)
+ggsave(file.path(path_fig, 'PCoA_plot_diversity.png'), p3, height = 5, width = 13)
+
+# Nothing to be used below this!!!! ####
+
+# filter out individual clones and see if fitness predicts distance from lacz ancestor
+
+# filter samples
+to_keep <- filter(meta_new, n_clones %in% c('1', 'high') & treatment != 'wt_ancestor')
+ps_sub <- prune_samples(to_keep$SampleID, ps)
+
+# remove Pseudomonas reads
+ps_sub <- subset_taxa(ps_sub, Genus != 'Pseudomonas')
+
+# make counts proportions
+ps_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
+
+# ordinate and plot
+ord_wUni <- ordinate(ps_prop, method = 'MDS', distance = 'wunifrac')
+
+evals <- ord_wUni$values$Eigenvalues
+
+# plot
+plot_ordination(ps_prop, ord_wUni, color = "fitness") +
+  coord_fixed(sqrt(evals[2] / evals[1])) +
+  geom_point(size = 2) +
+  theme_bw(base_size = 14, base_family = 'Helvetica') +
+  ggtitle('PCoA plot based on weighted Unifrac distances') +
+  facet_wrap(~ treatment)
+
+# get weighted-unifrac matrix
+ps_wunifrac <- phyloseq::distance(ps_prop, method = 'wunifrac')
+
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_prop))
+d_samp <- mutate(d_samp,
+                 nclones_fac = as.factor(n_clones)) %>%
+  column_to_rownames(., 'SampleID')
+
+d_wunifrac <- as.matrix(ps_wunifrac, labels = TRUE) %>%
+  as.data.frame.table(., stringsAsFactors = FALSE)
+
+d_meta_ind_clone <- sample_data(ps_prop) %>% 
+  data.frame() %>%
+  filter(., treatment == 'individual_clone') %>%
+  select(., SampleID, fitness, preadapt_pop, evolution) %>%
+  rename(., Var1 = SampleID)
+d_meta_cont <- sample_data(ps_prop) %>% 
+  data.frame() %>%
+  filter(., treatment != 'individual_clone') %>%
+  select(., SampleID, treatment) %>%
+  rename(., Var2 = SampleID)
+
+d_wunifrac <- filter(d_wunifrac, Var1 != Var2) %>%
+  filter(., Var1 %in% d_meta_ind_clone$Var1) %>%
+  filter(., Var2 %in% d_meta_cont$Var2)
+d_wunifrac <- merge(d_wunifrac, d_meta_cont, by = 'Var2') %>% merge(., d_meta_ind_clone, by = 'Var1') %>%
+  rename(., wunifrac = Freq)
+
+ggplot(d_wunifrac, aes(fitness, wunifrac, col = evolution)) +
+  geom_point() +
+  facet_wrap(~ treatment)
+# NOPE - definitely not
+
+d_fitness <- filter(d_wunifrac, treatment == 'lacz_ancestor') %>%
+  distinct(., Var1, .keep_all = TRUE)
+
+ggplot(d_fitness, aes(evolution, fitness)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.1, height = 0.1), size = 3) +
+  theme_bw(base_size = 14) +
+  ggtitle('Effect of preadaptation history on individual clone fitness')
+
+ggsave(file.path(path_fig, 'ind_clone_fitness.png'), last_plot(), height = 5, width = 6)
+
+mod <- lm(fitness ~ evolution, d_fitness)
+mod1 <- lmer(fitness ~ evolution + (1|preadapt_pop), d_fitness)
+mod2 <- lmer(fitness ~ 1 + (1|preadapt_pop), d_fitness)
+
+mod1 <- lmer(Freq ~ fitness*treatment + (1|Var1), d_wunifrac, na.action = na.fail, REML = FALSE)
+MuMIn::dredge(mod1)
+mod2 <- lmer(Freq ~ fitness + treatment + (1|Var1), d_wunifrac, na.action = na.fail, REML = FALSE)
+mod3 <- lmer(Freq ~ treatment + (1|Var1), d_wunifrac, na.action = na.fail, REML = FALSE)
+
 
 # analysis of just individual clones, wild type (lacz) vs pre-adapted ####
 

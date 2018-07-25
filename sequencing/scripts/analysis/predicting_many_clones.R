@@ -79,6 +79,16 @@ ps_bray <- phyloseq::distance(ps2, method = 'bray')
 pcoa <- capscale(ps_bray ~ 1)
 plot(pcoa)
 
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_prop))
+d_samp_ind <- filter(d_samp, treatment == 'individual_clone')
+d_samp_4 <- filter(d_samp, treatment != 'individual_clone')
+
+# create column for clone
+d_samp_ind <- mutate(d_samp_ind, clone = paste('C', sample_name, sep = '_')) %>%
+  mutate(., rep = group_indices(., preadapt_pop),
+         evol = 'related')
+
 # try and get the data of the pcoa out
 d_pcoa <- fortify(pcoa) %>%
   janitor::clean_names() %>%
@@ -100,16 +110,6 @@ d_ord <- d_nmds
 # filter for just the clones
 d_ord_ind <- filter(d_ord, sample_name %in% as.character(1:48)) %>%
   mutate(., clone = paste('C', sample_name, sep = '_'))
-
-# make a data frame of the sample data
-d_samp <- data.frame(sample_data(ps_prop))
-d_samp_ind <- filter(d_samp, treatment == 'individual_clone')
-d_samp_4 <- filter(d_samp, treatment != 'individual_clone')
-
-# create column for clone
-d_samp_ind <- mutate(d_samp_ind, clone = paste('C', sample_name, sep = '_')) %>%
-  mutate(., rep = group_indices(., preadapt_pop),
-         evol = 'related')
 
 # get every combination used in the experiment
 
@@ -250,13 +250,14 @@ p1 <- ggplot(d_ord_ind, aes(nmds1, nmds2)) +
   facet_wrap(~rep2) +
   ggtitle('Position of each replicate in euclidean space based on an NMDS',
           subtitle = 'Red circles are 4 clone responses, triangles are centroid positions') +
-  theme_bw()
+  theme_bw(base_size = 8)
 
 d_perm_dist = data.frame(n_perm = 1:n_perm, dist = perm_dist)
 
 p2 <- ggplot(d_perm_dist, aes(dist)) +
   geom_histogram(fill = 'white', col = 'black') +
   geom_vline(aes(xintercept = actual_dist), col = 'red') +
+  theme_grey(base_size = 8) +
   xlab('Euclidean distance between two points') +
   ggtitle('Permuted euclidean distance between centroid of 4 individual clones and actual effect of 4 clones',
           subtitle = 'Red line is average distance of actual measured data')
@@ -270,4 +271,4 @@ sum(perm_dist - actual_dist < 0) /(n_perm + 1)
 p3 <- p1 + p2
 p3
 
-ggsave(file.path(path_fig, 'predict_multiclones.pdf'), p3, height = 8, width = 13)
+ggsave(file.path(path_fig, 'predict_multiclones.png'), p3, height = 5, width = 14)

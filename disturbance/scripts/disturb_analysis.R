@@ -67,23 +67,34 @@ ggplot(d, aes(disturb_current, post_competitor)) +
 # make disturb_past and disturb_current factors
 d <- mutate_at(d, c('disturb_past', 'disturb_current'), as.factor)
 
+# get data into correct format
+d_sum <- group_by(d, disturb_past, disturb_current, same_disturb) %>%
+  summarise(., pres = sum(pres_abs),
+            abs = 6 - pres) %>%
+  ungroup() %>%
+  mutate(., obs = 1:n(),
+         tot_rep = 6)
+
 # glm
-model_glm <- glm(pres_abs ~ disturb_past*disturb_current, d, family = 'quasibinomial')
-model_glm2 <- glm(pres_abs ~ disturb_past+disturb_current, d, family = 'quasibinomial')
-model_glm3 <- glm(pres_abs ~ disturb_past, d, family = 'quasibinomial')
+model_glm <- glm(cbind(pres, abs) ~ disturb_past*disturb_current, d_sum, family = binomial(logit))
+model_glm2 <- glm(cbind(pres, abs) ~ disturb_past+disturb_current, d_sum, family = binomial(logit))
+model_glm3 <- glm(cbind(pres, abs) ~ disturb_past, d_sum, family = binomial(logit))
+
+# check for overdispersion (it should not be over 1.4)
+AER::dispersiontest(model_glm)
+
 anova(model_glm2, model_glm3, test = 'Chisq')
 anova(model_glm3, test = 'Chisq')
 
 # try brms for binomial regression
-model_bf <- bf(pres_abs ~ disturb_past*disturb_current,
-               zi ~ disturb_past*disturb_current)
+model_bf <- bf(pres_abs ~ disturb_past*disturb_current)
 
 # run model
 model_brms <- brm(model_bf, 
                   data = d, 
                   family = zero_inflated_binomial,
                   chains = 3,
-                  iter = 10000)
+                  iter = 1000)
 
 summary(model_brms)
 plot(marginal_effects(model_brms), ask = FALSE)
