@@ -8,6 +8,7 @@ library(ggplot2)
 library(magrittr)
 library(vegan)
 library(gridExtra)
+library(lme4)
 
 # figure path
 path_fig <- 'sequencing/plots/fresh'
@@ -118,27 +119,49 @@ mod1 <- lm(pielou ~ evolution, a_div_24)
 mod2 <- lm(pielou ~ 1, a_div_24)
 anova(mod1, mod2)
 
+# look at diversity of pseudomonads across samples and treatments ####
 
-# a few plots ####
-ggplot(filter(a_div, !is.na(preadapt_pop)), aes(treatment, observed)) +
-  add_boxplot(fill = 'black') +
-  geom_point(aes(col = evolution), shape = 21, fill = 'white', position = position_jitter(width = 0.15)) +
-  ggtitle('Observed OTUs') +
+ps2 <- subset_taxa(ps, Genus == 'Pseudomonas')
+sample_sums(ps2)
+
+a_div_pseu <- subset_taxa(ps2) %>%
+  estimate_richness(., measures = c('Shannon', 'Observed')) %>%
+  mutate(., SampleID = row.names(.)) %>%
+  mutate(., pielou = Shannon / log(Observed)) %>%
+  janitor::clean_names() %>%
+  merge(., m, by = 'sample_id') %>%
+  mutate_at(., c('sample_id', 'treatment', 'sample_name', 'evolution'), as.character) 
+
+a_div_pseu <- select(a_div_pseu, sample_id, treatment, evolution, preadapt_pop, observed, pielou) %>%
+  filter(treatment != 'wt_ancestor')
+
+gather(a_div_pseu, 'metric', 'value', c(observed, pielou)) %>%
+  ggplot(., aes(treatment, value)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15), size = 3) +
+  ggtitle('Diversity and evenness across treatments') +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  facet_wrap(~preadapt_pop)
+  facet_wrap(~metric, scale = 'free_y')
 
+# calculate max proportion of ASVs per sample
+d_pseu <- psmelt(ps2) %>%
+  janitor::clean_names() %>%
+  filter(treatment != 'wt_ancestor') %>%
+  group_by(sample) %>%
+  mutate(., prop = abundance / sum(abundance)) %>%
+  ungroup()
 
-ggplot(a_div, aes(treatment, Shannon)) +
-  add_boxplot(fill = 'black') +
-  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15)) +
-  ggtitle('Shannon diversity')
-ggplot(a_div, aes(treatment, Fisher)) +
-  add_boxplot(fill = 'black') +
-  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15)) +
-  ggtitle('Fishers diversity')
-ggplot(a_div, aes(treatment, Chao1)) +
-  add_boxplot(fill = 'black') +
-  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15)) +
-  ggtitle('Chao index')
+# plot
+group_by(d_pseu, sample) %>%
+  filter(., prop == max(prop)) %>%
+  ggplot(., aes(treatment, prop)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15), size = 3) +
+  ggtitle('Diversity and evenness across treatments') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-
+# per OTU presence in samples
+d_pres <- filter(d_pseu, abundance > 0) %>%
+  group_by(otu) %>%
+  summarise(., n_samples = n(),
+            ave_prop = mean(prop))

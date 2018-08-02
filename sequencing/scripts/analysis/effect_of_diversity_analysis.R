@@ -13,7 +13,6 @@ library(viridis)
 library(ggridges)
 library(tibble)
 library(patchwork) # devtools::install_github('thomasp85/patchwork')
-library(ggConvexHull)
 library(lme4)
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
@@ -170,11 +169,21 @@ d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
 # calculate distance matrix
 ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
 
+# get ready to permute distances between centroids
+vec_1 <- tibble::rownames_to_column(d_samp, var = 'sample') %>%
+  filter(., evolution == 'with_community') %>% 
+  pull(sample)
+vec_2 <- tibble::rownames_to_column(d_samp, var = 'sample') %>%
+  filter(., evolution == 'without_community') %>% 
+  pull(sample)
+
 # run an Adonis test
 # tried using strata to shuffle within across but not within replicates within each treatment
 # not right atm, but no effect anyway
 mod_div_1 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
 mod_betadisper_1 <- betadisper(ps_wunifrac, d_samp$evol_fac)
+d_perm1 <- permute_distance(ps_wunifrac, vec_1, vec_2) %>%
+  mutate(., nclones = 1)
 
 # 2. 4 related clones ####
 
@@ -200,9 +209,21 @@ d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
 # calculate distance matrix
 ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
 
+# get ready to permute distances between centroids
+vec_1 <- tibble::rownames_to_column(d_samp, var = 'sample') %>%
+  filter(., evolution == 'with_community') %>% 
+  pull(sample)
+vec_2 <- tibble::rownames_to_column(d_samp, var = 'sample') %>%
+  filter(., evolution == 'without_community') %>% 
+  pull(sample)
+
+usedist::dist_between_centroids(ps_wunifrac, vec_1, vec_2)
+
 # run an Adonis test
 mod_div_4 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
 mod_betadisper_4 <- betadisper(ps_wunifrac, d_samp$evol_fac)
+d_perm4 <- permute_distance(ps_wunifrac, vec_1, vec_2) %>%
+  mutate(., nclones = 4)
 
 # 3. 24 related clones ####
 
@@ -227,9 +248,19 @@ d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
 # calculate distance matrix
 ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
 
+# get ready to permute distances between centroids
+vec_1 <- tibble::rownames_to_column(d_samp, var = 'sample') %>%
+  filter(., evolution == 'with_community') %>% 
+  pull(sample)
+vec_2 <- tibble::rownames_to_column(d_samp, var = 'sample') %>%
+  filter(., evolution == 'without_community') %>% 
+  pull(sample)
+
 # run an Adonis test
 mod_div_24 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
 mod_betadisper_24 <- betadisper(ps_wunifrac, d_samp$evol_fac)
+d_perm24 <- permute_distance(ps_wunifrac, vec_1, vec_2) %>%
+  mutate(., nclones = 24)
 
 # Figure 1, looking at effect of pre-adaptation context across different levels of diversity ####
 
@@ -288,6 +319,10 @@ d_fig1$eigenvector <- separate(d_fig1$eigenvector, group, c('nclones', 'evol'), 
          nclones =forcats::fct_relevel(nclones,
                                        "C_1", "C_4", "C_24"))
 
+# clone labels
+labels = c('1 clone', '4 clones', '24 clones')
+facet <- c(C_1 = '1 clone', C_4 = '4 clones', C_24 = '24 clones')
+
 # plot PCoA
 fig1 <- ggplot() +
   geom_point(aes(PCoA1, PCoA2, alpha = 1 - distances), select(filter(d_fig1$eigenvector, evol %in% c('negative_control')), -nclones), size = 0.75, col = 'blue') +
@@ -301,15 +336,34 @@ fig1 <- ggplot() +
   ylab('PCoA Axis 2') +
   xlab('PCoA Axis 1') +
   theme(legend.position = 'bottom') +
-  facet_wrap(~ nclones) +
+  facet_wrap(~ nclones, labeller = labeller(nclones = facet)) +
   ggtitle('PCoA of the effect of preadaptation history across different levels of diversity',
           subtitle = 'blue points are the nmc, orange are lacz ancestor') +
   scale_alpha(range = c(0.0001, 0.75), guide = FALSE) +
   scale_color_manual('', values = c('grey', 'black'))
 
 # save plot, other ways are available
-ggsave(file.path(path_fig, 'effect_of_evol_history.png'), last_plot(), height = 6, width = 12)
+ggsave(file.path(path_fig, 'effect_of_evol_history.png'), fig1, height = 6, width = 12)
 
+# plot all distances between centroids
+d_perm <- bind_rows(d_perm1, d_perm4, d_perm24) %>%
+  group_by(., nclones, type) %>%
+  tidybayes::mean_qi() %>%
+  ungroup() %>%
+  mutate(., nclones_fac = paste('C_', nclones, sep = ''))
+
+fig2 <- ggplot() +
+  geom_point(aes(forcats::fct_reorder(nclones_fac, nclones), dist), filter(d_perm, type == 'actual_distance'), size = 3) +
+  geom_linerange(aes(forcats::fct_reorder(nclones_fac, nclones), ymin = .lower, ymax = .upper), filter(d_perm, type == 'permuted')) +
+  ylim(c(0, 0.15)) +
+  theme_bw() +
+  ylab('pairwise distance between centroids') +
+  xlab('clonal diversity') +
+  scale_x_discrete(labels = labels)
+
+fig3 <- fig1 + fig2 + plot_layout(ncol = 2, widths = c(0.75, 0.25))
+
+ggsave(file.path(path_fig, 'effect_of_evol_history.png'), fig3, height = 4.5, width = 12)
 
 #-----------------------------------------------------------------------#
 # Weighted Unifrac just on diversity, ignoring preadaptation context ####
