@@ -21,7 +21,10 @@ ggplot(d, aes(treatment, density_cfu_g)) +
   ggtitle('Abundance of P. fluorescens at the end of the experiment') +
   xlab('Treatment') +
   ylab('Density (CFU / g)') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_log10(breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+  annotation_logticks(sides = "l")
 
 ggsave(file.path(path_fig, 'pseudomonas_abundance.png'), last_plot(), height = 6, width = 8)
 

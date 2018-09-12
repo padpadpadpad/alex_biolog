@@ -121,11 +121,14 @@ anova(mod1, mod2)
 
 # look at diversity of pseudomonads across samples and treatments ####
 
+SBW25 = "ACAGAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGCGCGTAGGTGGTTTGTTAAGTTGGATGTGAAATCCCCGGGCTCAACCTGGGAACTGCATTCAAAACTGACTGACTAGAGTATGGTAGAGGGTGGTGGAATTTCCTGTGTAGCGGTGAAATGCGTAGATATAGGAAGGAACACCAGTGGCGAAGGCGACCACCTGGACTGATACTGACACTGAGGTGCGAAAGCGTGGGGAGCAA"
+
 ps2 <- subset_taxa(ps, Genus == 'Pseudomonas')
+#ps2 <- subset_taxa(ps, rownames(tax_table(ps)) %in% c(SBW25))
 sample_sums(ps2)
 
-a_div_pseu <- subset_taxa(ps2) %>%
-  estimate_richness(., measures = c('Shannon', 'Observed')) %>%
+a_div_pseu <- #subset_taxa(ps2, rownames(tax_table(ps)) %in% c(SBW25)) %>%
+  estimate_richness(ps2, measures = c('Shannon', 'Observed')) %>%
   mutate(., SampleID = row.names(.)) %>%
   mutate(., pielou = Shannon / log(Observed)) %>%
   janitor::clean_names() %>%
@@ -138,7 +141,7 @@ a_div_pseu <- select(a_div_pseu, sample_id, treatment, evolution, preadapt_pop, 
 gather(a_div_pseu, 'metric', 'value', c(observed, pielou)) %>%
   ggplot(., aes(treatment, value)) +
   MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
-  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15), size = 3) +
+  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15, height = 0), size = 3) +
   ggtitle('Diversity and evenness across treatments') +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   facet_wrap(~metric, scale = 'free_y')
@@ -147,18 +150,28 @@ gather(a_div_pseu, 'metric', 'value', c(observed, pielou)) %>%
 d_pseu <- psmelt(ps2) %>%
   janitor::clean_names() %>%
   filter(treatment != 'wt_ancestor') %>%
-  group_by(sample) %>%
-  mutate(., prop = abundance / sum(abundance)) %>%
-  ungroup()
+  mutate(SBW25 = ifelse(otu == SBW25, 'yes', 'no')) %>%
+  group_by(sample, SBW25, treatment) %>%
+  summarise(., abundance = sum(abundance)) %>%
+  ungroup() %>%
+  spread(., SBW25, abundance) %>%
+  mutate(., prop = yes / (no + yes))
 
+select(d_pseu, otu) %>%
+  do(tibble(otu = paste('pseudomonad', 1:length(unique(.$otu)), sep = '_'), seq = unique(.$otu))) %>%
+  write.csv(., 'sequencing/data/output/pseudomonads.csv', row.names = FALSE)
+  
 # plot
 group_by(d_pseu, sample) %>%
-  filter(., prop == max(prop)) %>%
   ggplot(., aes(treatment, prop)) +
   MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
   geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15), size = 3) +
-  ggtitle('Diversity and evenness across treatments') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  ggtitle('Proportion of SBW25 relative to the other Pseudomonads across treatments') +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylab('proportion of reads assigned to SBW25') 
+
+ggsave(file.path(path_fig, 'SBW25_success.pdf'), last_plot(), height = 5, width = 7)
 
 # per OTU presence in samples
 d_pres <- filter(d_pseu, abundance > 0) %>%

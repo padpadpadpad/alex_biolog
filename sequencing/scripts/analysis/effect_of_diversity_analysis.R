@@ -101,7 +101,7 @@ rank_names(ps)
 
 # look at the number of reads per sample
 sample_sums(ps)
-min(sample_sums(ps)) # min of 28,000. Woof.
+min(sample_sums(ps)) # min of 28,000 Woof.
 
 # not going to rarefy those samples yet
 
@@ -134,7 +134,7 @@ ggplot(d_pseu, aes(treatment, prop)) +
   theme_bw(base_size = 14) +
   ylab('Proportion of total reads') +
   xlab('Treatment') +
-  theme(axis.text.x = element_text(angle =45, hjust = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   ggtitle('Proportion of Pseudomonas reads in sample',
           subtitle = 'No spp assignment for Pseudomonas so all Pseudomonas reads clumped together')
 
