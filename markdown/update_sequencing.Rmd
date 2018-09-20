@@ -96,7 +96,38 @@ knitr::include_graphics(c('../sequencing/plots/fresh/alpha_diversity.png'))
 
 Alpha diversity seems a bit weird. Richness is largest in `nmc_t0` (makes sense), but the negative control has the biggest reduction in observed OTUs (alongside `evolved_without_community`).
 
-Not what to make of this...
+Not sure what to make of this...
+
+## Look at abundance of Pseudomonads across samples
+
+__1. Try and identify Pseudomonas fluorescens__
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/alex_pseudomonas_tree.png'))
+```
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/alex_pseudomonas_distance.png'))
+```
+
+__2. How abundant are Pseudomonads and this sequence (SBW25)__
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/pseudomonas_abundance.png'))
+```
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/SBW25_prop.png'))
+```
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/prop_pseudomonas.png'))
+```
+
+```{r echo = TRUE, out.width="100%"}
+knitr::include_graphics(c('../sequencing/plots/fresh/pseudomonas_diversity.png'))
+```
+
 
 ## Other Qs answered previously and possible avenues to go down
 

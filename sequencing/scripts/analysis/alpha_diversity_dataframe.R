@@ -172,6 +172,8 @@ group_by(d_pseu, sample) %>%
   ylab('proportion of reads assigned to SBW25') 
 
 ggsave(file.path(path_fig, 'SBW25_success.pdf'), last_plot(), height = 5, width = 7)
+ggsave(file.path(path_fig, 'SBW25_prop.png'), last_plot(), height = 5, width = 7)
+
 
 # per OTU presence in samples
 d_pres <- filter(d_pseu, abundance > 0) %>%
