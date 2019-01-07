@@ -1,4 +1,4 @@
-# analysis script
+# analysis of new biolog plate data
 
 rm(list = ls())
 
@@ -82,16 +82,15 @@ d_t4_590 <- group_by(d_t4_590, substrate) %>%
 
 # plot performance across wells, ranked by best performance
 plot1 <- ggplot(filter(d_t4_590, mean_od > 0.1)) +
-  geom_line(aes(forcats::fct_reorder(substrate, rank), od_cor, group = sample, col = test), alpha = 0.25) +
-  stat_summary(aes(rank, od_cor, col = test, group = evolved), fun.y = mean, geom = 'line') +
+  geom_line(aes(forcats::fct_reorder(substrate, rank), od_cor, group = sample, col = evolved), alpha = 0.25) +
   theme_bw(base_size = 12, base_family = 'Helvetica') +
-  theme(legend.position = c(0.9, 0.8),
-        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.position = c(0.9, 0.005),
+        axis.text.x = element_text(angle = 315, hjust = 0)) +
   ylab('optical density') +
   xlab('substrate rank') +
   ggtitle('Substrate rank across populations') +
   guides(col = guide_legend(override.aes = list(alpha = 1))) +
-  facet_wrap(~ evolved)
+  facet_wrap(~ evolved + population, labeller = labeller(.multi_line = FALSE))
 
 ggsave(file.path(path_fig, 'performance_plot.pdf'), plot1, height = 10, width = 10)
 ggsave(file.path(path_fig, 'performance_plot2.pdf'), plot1a + facet_wrap(~evolved) + scale_color_manual(values = rep('black', 3)), height = 5, width = 12)
@@ -116,6 +115,7 @@ V_P <- group_by(pop_dists_df, evolved) %>%
 
 # calculate V_G - genotypic variance ####
 # variance of OD across each genotype averaged over all the environments
+# again does this need to be done across replicates rather than clones?
 V_G <- group_by(d_t4_590, evolved, substrate) %>%
   summarise(V_G = var(od_cor)) %>%
   data.frame()
@@ -125,6 +125,7 @@ V_G_pop <- group_by(V_G, evolved) %>%
 
 # calculate V_E - environmental variance
 # average variance of each clone across all the environments
+# does this need to be done on a replicate basis?
 V_E <- group_by(d_t4_590, evolved, sample) %>%
   summarise(V_E = var(od_cor)) %>%
   data.frame()
@@ -140,7 +141,7 @@ emmeans::emmeans(mod_vg, pairwise ~ evolved)
 
 # environmental variance
 mod_pg <- lm(V_E ~ evolved, V_E)
-lsmeans::lsmeans(mod_pg, pairwise ~ evolved)
+emmeans::emmeans(mod_vg, pairwise ~ evolved)
 
 # plot genotypic and environmental variance across evolveds ####
 # plot V_G and V_E ####
@@ -173,23 +174,6 @@ plot2 <- gridExtra::grid.arrange(V_G_plot, V_E_plot, ncol = 2)
 
 ggsave(file.path(path_fig, 'geno_enviro_var_plot.pdf'), plot2, height = 5, width = 10)
 
-# plot all carbon sources ####
-y_axis_change <- group_by(d_stack2, rank) %>%
-  summarise(C_source = unique(C_source)) %>%
-  pull(C_source)
-
-ggplot(d_stack2) +
-  geom_density_ridges2(aes(x = OD_cor, y = factor(rank), fill = evolved, col = evolved), alpha = 0.5, rel_min_height = 0.01) +
-  scale_fill_viridis(discrete = TRUE) +
-  scale_color_viridis(discrete = TRUE) +
-  geom_point(aes(x = WT, y = factor(rank)), size = 0.5) +
-  theme_bw() +
-  scale_y_discrete(labels = y_axis_change) +
-  ylab('Carbon source') +
-  xlab('Optical Density')
-
-ggsave(file.path(path_fig, 'crazy_ggjoy_plot.pdf'), last_plot(), height = 12, width = 6)
-
 # Calculate G x E interaction for each population ####
 # see Barrett et al. 2005 Am Nat and Venail et al. 2008 Nature
 # 1. calculate responsiveness - indicates differences in the environmental variances and thus measures diversity of resource exploitation strategies (specialists and generalists)
@@ -212,9 +196,9 @@ d_R <- group_by(d_sd, evolved, population) %>%
   merge(., sd_j_clone, by = c('clone_j', 'evolved', 'population')) %>%
   merge(., sd_i_clone, by = c('clone_i', 'evolved', 'population'))
 
-2# calculate R for each pairwise combination
+# calculate R for each pairwise combination
 d_R <- group_by(d_R, evolved, population) %>%
-  mutate(., R_comb = (sd_j - sd_i)^2/(length(unique(clone_i))*(length(unique(clone_i))-1))) %>%
+  mutate(., R_comb = (sd_j - sd_i)^2/(n())*(n()-1)) %>%
   ungroup()
 
 # calculate responsiveness for each population
@@ -240,19 +224,22 @@ r_plot <- ggplot(d_R_pop, aes(evolved, R_pop)) +
 
 # prep data for calculating correlations
 d_pearson <- group_by(d_t4_590, evolved, population) %>%
-  do(data.frame(pairwise_cor(sample, substrate, od_cor, upper = FALSE))) %>%
-  data.frame()
+  nest() %>%
+  mutate(., cor_col = purrr::map(data, pairwise_cor, item = sample, feature = substrate, value = od_cor, upper = FALSE)) %>%
+  unnest(cor_col) %>%
+  rename(clone_i = item1, clone_j = item2) 
 
 # merge dataframe to responsiveness dataframe
-d_Inconsist <- merge(d_R, d_pearson, by = c('evolved', 'pop', 'clone_j', 'clone_i')) %>%
-  mutate(., i = (sd_j*sd_i*(1-pear_cor))/(length(unique(clone_i))*(length(unique(clone_i))-1)))
-d_I_pop <- group_by(d_Inconsist, evolved, pop) %>%
+d_inconsist <- merge(d_pearson, sd_i_clone, by = c('evolved', 'population', 'clone_i'), all.x = TRUE) %>%
+  merge(., sd_j_clone, by = c('evolved', 'population', 'clone_j'), all.x = TRUE) %>%
+  group_by(., evolved, population) %>%
+  mutate(., i = (sd_j*sd_i*(1-correlation))/(n()*(n()-1))) %>%
   summarise(., I_pop = sum(i),
-            pear_pop = mean(pear_cor)) %>%
+            pear_pop = mean(correlation)) %>%
   data.frame()
 
 # plot inconsistency
-I_plot <- ggplot(d_I_pop, aes(evolved, I_pop)) +
+I_plot <- ggplot(d_inconsist, aes(evolved, I_pop)) +
   geom_point(aes(evolved, I_pop, col = evolved), size = 3) +
   ylab('Inconsistency') +
   xlab('evolved') +

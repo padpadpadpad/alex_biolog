@@ -76,15 +76,27 @@ d_sum <- group_by(d, disturb_past, disturb_current, same_disturb) %>%
          tot_rep = 6)
 
 # glm
-model_glm <- glm(cbind(pres, abs) ~ disturb_past*disturb_current, d_sum, family = binomial(logit))
-model_glm2 <- glm(cbind(pres, abs) ~ disturb_past+disturb_current, d_sum, family = binomial(logit))
+model_glm <- glm(cbind(pres, abs) ~ disturb_past*disturb_current, d_sum, family = binomial(logit), na.action = na.fail)
+# glm
+model_glm <- glm(cbind(pres, abs) ~ as.numeric(disturb_past)*as.numeric(disturb_current), d_sum, family = binomial(logit), na.action = na.fail)
+
+# 
+model_glm2 <- glm(cbind(pres, abs) ~ as.numeric(disturb_past)*as.numeric(disturb_current), d_sum, family = binomial(logit), na.action = na.fail)
+
 model_glm3 <- glm(cbind(pres, abs) ~ disturb_past, d_sum, family = binomial(logit))
+model_glm4 <- glm(cbind(pres, abs) ~ disturb_current, d_sum, family = binomial(logit))
+model_glm5 <- glm(cbind(pres, abs) ~ 1, d_sum, family = binomial(logit))
+
 
 # check for overdispersion (it should not be over 1.4)
 AER::dispersiontest(model_glm)
 
 anova(model_glm2, model_glm3, test = 'Chisq')
-anova(model_glm3, test = 'Chisq')
+anova(model_glm2, model_glm4, test = 'Chisq')
+anova(model_glm4, model_glm5, test = 'Chisq')
+anova(model_glm2, test = 'Chisq')
+
+MuMIn::dredge(model_glm2)
 
 # try brms for binomial regression
 model_bf <- bf(pres_abs ~ disturb_past*disturb_current)
