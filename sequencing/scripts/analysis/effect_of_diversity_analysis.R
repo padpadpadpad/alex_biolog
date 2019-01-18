@@ -111,7 +111,7 @@ min(sample_sums(ps)) # min of 28,000 Woof.
 # filter some samples with NA for n_clones ####
 # specifically negative control, nmc_T0 & wt_ancestor (dont care as only lacz were in the communities)
 # specifically wt ancestor and nmc_t0
-to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', 'wt_ancestor'))
+to_keep <- filter(meta_new, ! treatment %in% c('wt_ancestor'))
 ps2 <- prune_samples(to_keep$SampleID, ps)
 
 # remove Pseudomonas reads from the analysis ####
