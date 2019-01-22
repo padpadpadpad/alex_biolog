@@ -191,7 +191,7 @@ V_P_plot <- ggplot(V_P, aes(evolved, V_P)) +
 # plot
 plot2 <- V_P_plot + V_G_plot + V_E_plot
 
-ggsave(file.path(path_fig, 'VE_VP_VG.pdf'), plot2, height = 5, width = 18)
+#ggsave(file.path(path_fig, 'VE_VP_VG.pdf'), plot2, height = 5, width = 18)
 
 #----------------------------------------------------#
 # Calculate G x E interaction for each population ####
@@ -261,7 +261,7 @@ d_inconsist <- merge(d_pearson, sd_i_clone, by = c('evolved', 'population', 'clo
   merge(., sd_j_clone, by = c('evolved', 'population', 'clone_j'), all.x = TRUE) %>%
   group_by(., evolved, population) %>%
   mutate(., i = (sd_j*sd_i*(1-correlation))/(n()*(n()-1))) %>%
-  summarise(., I_pop = sum(i),
+  summarise(., I_pop = log(sum(i)),
             pear_pop = mean(correlation)) %>%
   data.frame()
 
@@ -270,7 +270,7 @@ I_plot <- ggplot(d_inconsist, aes(evolved, I_pop)) +
   geom_pretty_boxplot(aes(evolved, I_pop), filter(d_inconsist, evolved != 'ancestor'), col = 'black', fill = 'black') +
   geom_point(aes(evolved, I_pop), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(d_inconsist, evolved != 'ancestor')) +
   geom_point(aes(evolved, I_pop), shape = 21, fill = 'white', size = 5, filter(d_inconsist, evolved == 'ancestor')) +
-  ylab('Inconsistency') +
+  ylab('ln Inconsistency') +
   xlab('evolved') +
   theme_bw(base_size = 16) +
   theme(legend.position = 'none') +
@@ -279,6 +279,30 @@ I_plot <- ggplot(d_inconsist, aes(evolved, I_pop)) +
 
 p_V_by_G <- r_plot + I_plot
 
-ggsave(file.path(path_fig, 'V_GE_interaction.pdf'), p_V_by_G, height = 6, width = 15)
+# ggsave(file.path(path_fig, 'V_GE_interaction.pdf'), p_V_by_G, height = 6, width = 15)
 
-summary(lm(I_pop ~ evolved, d_inconsist))
+fit_inconsist <- lm(log(I_pop) ~ evolved, filter(d_inconsist, evolved != 'ancestor'))
+
+# plot of fitness
+
+# load data
+d <- read.csv('sequencing/data/metadata.csv', stringsAsFactors = FALSE) %>%
+  janitor::clean_names()
+
+d <- filter(d, treatment %in% c('individual_clone'))
+
+# plot
+ggplot(d, aes(evolution, fitness)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(fill = 'white', shape = 21, position  = position_jitter(width = 0.1), size = 3) +
+  theme_bw() +
+  xlab('Treatment') +
+  ylab('Relative fitness') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+model <- lme4::lmer(fitness ~ evolution + (1|preadapt_pop), d)
+model2 <- lme4::lmer(fitness ~ 1 + (1|preadapt_pop), d)
+anova(model, model2)
+
+# calculate maximum growth rate
+
