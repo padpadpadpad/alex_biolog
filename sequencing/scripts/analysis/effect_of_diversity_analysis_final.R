@@ -16,7 +16,10 @@ library(patchwork) # devtools::install_github('thomasp85/patchwork')
 library(lme4)
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
+#--------------#
 # functions ####
+#--------------#
+
 # code stolen from phyloseq website
 get_top_taxa <- function(ps, tax_rank, to_keep){
   temp <- tapply(phyloseq::taxa_sums(ps), phyloseq::tax_table(ps)[, tax_rank], sum, na.rm = TRUE)
@@ -25,7 +28,6 @@ get_top_taxa <- function(ps, tax_rank, to_keep){
 }
 
 # get betadisper dataframes
-# have written functions to grab the necessary data from the betadisper object
 
 # getting distances from betadisper() object
 betadisper_distances <- function(model){
@@ -80,18 +82,20 @@ dist_between_points <- function(x1, x2, y1, y2){
   return(abs(sqrt((x1 - x2)^2+(y1-y2)^2)))
 }
 
+#-------------------------------------#
+# setup workspace and load in data ####
+#-------------------------------------#
+
 # set seed
 set.seed(42)
 
 # figure path
-path_fig <- 'sequencing/plots/fresh'
+path_fig <- 'plots'
 
-# load data - latest run which we are happy with ####
-# these files need to be there
+# load data - latest run which we are happy with
 ps <- readRDS('sequencing/data/output/20171024_17:18/ps_no_NA_phyla.rds')
 
 # replace metadata with new metadata
-# when wanting to add columns to metadata, it is better to edit metadata_creation and overwrite the metadata file as then it can be overwritten in all future files
 meta_new <- read.csv('sequencing/data/metadata.csv', stringsAsFactors = FALSE)
 row.names(meta_new) <- meta_new$SampleID
 sample_data(ps) <- sample_data(meta_new)
@@ -103,57 +107,27 @@ rank_names(ps)
 sample_sums(ps)
 min(sample_sums(ps)) # min of 28,000 Woof.
 
-# not going to rarefy those samples yet
-
-# DIVERSITY ANALYSIS ####
-# Look at the effect of number of clones on community composition (as clustering)
-
-# filter some samples with NA for n_clones ####
-# specifically negative control, nmc_T0 & wt_ancestor (dont care as only lacz were in the communities)
-# specifically wt ancestor and nmc_t0
-to_keep <- filter(meta_new, ! treatment %in% c('wt_ancestor'))
+# initial subsetting - do not want nmc_t0 or wt_ancestor
+to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', 'wt_ancestor'))
 ps2 <- prune_samples(to_keep$SampleID, ps)
 
-# remove Pseudomonas reads from the analysis ####
+# remove Pseudomonas fluorescens reads from the data, leave other pseudomonads in
+SBW25 = "ACAGAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGCGCGTAGGTGGTTTGTTAAGTTGGATGTGAAATCCCCGGGCTCAACCTGGGAACTGCATTCAAAACTGACTGACTAGAGTATGGTAGAGGGTGGTGGAATTTCCTGTGTAGCGGTGAAATGCGTAGATATAGGAAGGAACACCAGTGGCGAAGGCGACCACCTGGACTGATACTGACACTGAGGTGCGAAAGCGTGGGGAGCAA"
 
-# have a look at number of genus 
-table(tax_table(ps2)[, "Genus"], exclude = NULL)
+ps2 <- subset_taxa(ps2, ! rownames(tax_table(ps2)) %in% c(SBW25))
 
-# have a look at Pseudomonas more closely
-d_pseu <- transform_sample_counts(ps2, function(x){x / sum(x)}) %>%
-  subset_taxa(., Genus == 'Pseudomonas') %>%
-  psmelt() %>%
-  group_by(SampleID, treatment, evolution, preadapt_pop) %>%
-  summarise(prop = sum(Abundance))
+# -------------------------------------------------------------------------------#
+# Analysis of the preadaptation with and without nmc on community composition ####
+#--------------------------------------------------------------------------------#
 
-# no species so delete all pseudomonas samples from data
-# plot proportion of abundance of pseudomonas across treatments
-ggplot(d_pseu, aes(treatment, prop)) +
-  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
-  geom_point(shape = 21, fill = 'white', size = 3, position = position_jitter(width = 0.1, height = 0)) +
-  theme_bw(base_size = 14) +
-  ylab('Proportion of total reads') +
-  xlab('Treatment') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  ggtitle('Proportion of Pseudomonas reads in sample',
-          subtitle = 'No spp assignment for Pseudomonas so all Pseudomonas reads clumped together')
-
-# save plot, other ways are available
-ggsave(file.path(path_fig, 'prop_pseudomonas.png'), last_plot(), height = 6, width = 8)
-
-# do analysis on effect of diversity and preadaptation with and without focal community ####
-
-# have this perfectly replicated for 1, 4 and 24 clones
+# perfectly replicated for 1, 4 and 24 clones
 # haver to do these separately because of nesting in the individual clone treatment
 
 # 1. individual clones ####
 
 # samples to keep - just individual clones
 to_keep <- filter(meta_new, treatment %in% c('individual_clone'))
-ps_sub <- prune_samples(to_keep$SampleID, ps)
-
-# remove Pseudomonas reads
-ps_sub <- subset_taxa(ps_sub, Genus != 'Pseudomonas')
+ps_sub <- prune_samples(to_keep$SampleID, ps2)
 
 # transform counts to relative abundances for ordination
 ps_sub_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
@@ -178,7 +152,7 @@ vec_2 <- tibble::rownames_to_column(d_samp, var = 'sample') %>%
   pull(sample)
 
 # run an Adonis test
-# tried using strata to shuffle within across but not within replicates within each treatment
+# tried using strata to shuffle within but not across replicates within each treatment
 # not right atm, but no effect anyway
 mod_div_1 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
 mod_betadisper_1 <- betadisper(ps_wunifrac, d_samp$evol_fac)
@@ -186,7 +160,6 @@ d_perm1 <- permute_distance(ps_wunifrac, vec_1, vec_2) %>%
   mutate(., nclones = 1)
 
 # 2. 4 related clones ####
-
 # filter treatments to keep
 to_keep <- filter(meta_new, treatment %in% c('4_related_clones'))
 ps_sub <- prune_samples(to_keep$SampleID, ps)
@@ -258,6 +231,7 @@ vec_2 <- tibble::rownames_to_column(d_samp, var = 'sample') %>%
 
 # run an Adonis test
 mod_div_24 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
+mod_betadisper_24 <- betadisper(ps_wunifrac, d_samp$evol_fac)
 d_perm24 <- permute_distance(ps_wunifrac, vec_1, vec_2) %>%
   mutate(., nclones = 24)
 
