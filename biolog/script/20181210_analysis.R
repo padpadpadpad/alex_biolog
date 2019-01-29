@@ -16,9 +16,11 @@ library(patchwork)
 library(widyr)
 library(corrr)
 library(MicrobioUoE)
+library(dglm)
+library(hglm)
 
 # figure path
-path_fig <- 'biolog/figs'
+path_fig <- 'plots'
 
 # source extra functions ####
 source('biolog/script/functions.R')
@@ -88,14 +90,14 @@ d_t4_590 <- group_by(d_t4_590, substrate) %>%
 
 # plot performance across wells, ranked by best performance
 plot1 <- ggplot(filter(d_t4_590, mean_od > 0.05)) +
-  geom_line(aes(forcats::fct_reorder(substrate, rank), od_cor, group = sample, col = evolved), alpha = 0.25) +
-  theme_bw(base_size = 12, base_family = 'Helvetica') +
+  geom_line(aes(forcats::fct_reorder(substrate, rank), od_cor, group = sample, col = evolved), alpha = 1) +
+  theme_bw(base_size = 16) +
   theme(legend.position = 'none',
-        axis.text.x = element_text(angle = 315, hjust = 0)) +
-  ylab('optical density') +
-  xlab('substrate rank') +
-  ggtitle('Substrate rank across populations') +
-  facet_wrap(~ evolved + population, labeller = labeller(.multi_line = FALSE))
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  ylab(expression(OD[600])) +
+  xlab('substrate') +
+  scale_color_manual(values = c('orange', 'dark grey', 'black')) +
+  ggtitle('(a) Resource-use of pre-adapted clones')
 
 ggsave(file.path(path_fig, 'performance_plot.pdf'), plot1, height = 10, width = 10)
 
@@ -168,14 +170,19 @@ V_G_plot <- ggplot(V_G_pop, aes(evolved, V_G)) +
   ggtitle(expression(Genotypic~variance~(V[G])))
 
 V_E_plot <- ggplot(V_E_pop, aes(evolved, V_E)) +
-  geom_pretty_boxplot(aes(evolved, V_E), filter(V_E_pop, evolved != 'ancestor'), col = 'black', fill = 'black') +
-  geom_point(aes(evolved, V_E), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_E_pop, evolved != 'ancestor')) +
-  geom_point(aes(evolved, V_E), shape = 21, fill = 'white', size = 5, filter(V_E_pop, evolved == 'ancestor')) +
+  geom_pretty_boxplot(aes(evolved, V_E, col = evolved, fill = evolved), filter(V_E_pop, evolved != 'ancestor')) +
+  geom_point(aes(evolved, V_E, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_E_pop, evolved != 'ancestor')) +
+  geom_point(aes(evolved, V_E), fill = 'white', size = 7, col = 'orange', filter(V_E_pop, evolved == 'ancestor')) +
   ylab('environmental variance') +
-  xlab('evolved') +
+  xlab('') +
   theme_bw(base_size = 16) +
-  theme(legend.position = 'none') +
-  ggtitle(expression(Environmental~variance~(V[E])))
+  theme(legend.position = 'none',
+        axis.text.x = element_text(size = 12, color = 'black')) +
+  ggtitle(expression((b)~Environmental~variance~(V[E]))) +
+  scale_x_discrete(labels = c('LacZ\nancestor', 'pre-adapted\nwith nmc', 'pre-adapted\nwithout nmc')) +
+  scale_color_manual('', values = c('dark grey', 'black')) +
+  scale_fill_manual('', values = c('dark grey', 'black'))
+
 
 V_P_plot <- ggplot(V_P, aes(evolved, V_P)) +
   geom_pretty_boxplot(aes(evolved, V_P), filter(V_P, evolved != 'ancestor'), col = 'black', fill = 'black') +
@@ -231,16 +238,19 @@ d_R_pop <- group_by(d_R, evolved, population) %>%
 
 # Plot responsiveness
 r_plot <- ggplot(d_R_pop, aes(evolved, R_pop)) +
-  geom_pretty_boxplot(aes(evolved, R_pop), filter(d_R_pop, evolved != 'ancestor'), col = 'black', fill = 'black') +
-  geom_point(aes(evolved, R_pop), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(d_R_pop, evolved != 'ancestor')) +
-  geom_point(aes(evolved, R_pop), shape = 21, fill = 'white', size = 5, filter(d_R_pop, evolved == 'ancestor')) +
+  geom_pretty_boxplot(aes(evolved, R_pop, col = evolved, fill = evolved), filter(d_R_pop, evolved != 'ancestor')) +
+  geom_point(aes(evolved, R_pop, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(d_R_pop, evolved != 'ancestor')) +
+  geom_point(aes(evolved, R_pop), col = 'orange', size = 7, filter(d_R_pop, evolved == 'ancestor')) +
   ylab('responsiveness') +
-  xlab('evolved') +
+  xlab('') +
   theme_bw(base_size = 16) +
-  theme(legend.position = 'none') +
-  ggtitle('(a) Responsiveness',
-          subtitle = 'indicates differences in environmental variances') +
-  scale_colour_viridis(discrete = TRUE)
+  theme(legend.position = 'none',
+        axis.text.x = element_text(size = 12, color = 'black')) +
+  ggtitle(expression((c)~Responsiveness)) +
+  scale_x_discrete(labels = c('LacZ\nancestor', 'pre-adapted\nwith nmc', 'pre-adapted\nwithout nmc')) +
+  scale_color_manual('', values = c('dark grey', 'black')) +
+  scale_fill_manual('', values = c('dark grey', 'black'))
+
 
 # not significantly different
 # summary(lm(R_pop ~ evolved, d_R_pop))
@@ -261,21 +271,32 @@ d_inconsist <- merge(d_pearson, sd_i_clone, by = c('evolved', 'population', 'clo
   merge(., sd_j_clone, by = c('evolved', 'population', 'clone_j'), all.x = TRUE) %>%
   group_by(., evolved, population) %>%
   mutate(., i = (sd_j*sd_i*(1-correlation))/(n()*(n()-1))) %>%
-  summarise(., I_pop = log(sum(i)),
+  summarise(., I_pop = sum(i),
             pear_pop = mean(correlation)) %>%
   data.frame()
 
 # plot inconsistency
 I_plot <- ggplot(d_inconsist, aes(evolved, I_pop)) +
-  geom_pretty_boxplot(aes(evolved, I_pop), filter(d_inconsist, evolved != 'ancestor'), col = 'black', fill = 'black') +
-  geom_point(aes(evolved, I_pop), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(d_inconsist, evolved != 'ancestor')) +
-  geom_point(aes(evolved, I_pop), shape = 21, fill = 'white', size = 5, filter(d_inconsist, evolved == 'ancestor')) +
-  ylab('ln Inconsistency') +
-  xlab('evolved') +
+  geom_pretty_boxplot(aes(evolved, I_pop, col = evolved, fill = evolved), filter(d_inconsist, evolved != 'ancestor')) +
+  geom_point(aes(evolved, I_pop, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(d_inconsist, evolved != 'ancestor')) +
+  geom_point(aes(evolved, I_pop), col = 'orange', size = 7, filter(d_inconsist, evolved == 'ancestor')) +
+  ylab('Inconsistency') +
+  xlab('') +
   theme_bw(base_size = 16) +
-  theme(legend.position = 'none') +
-  ggtitle('(b) Inconsistency',
-          subtitle = 'indicating non-correlations between genotypes within a population')
+  theme(legend.position = 'none',
+        axis.text.x = element_text(size = 12, color = 'black')) +
+  ggtitle(expression((d)~Inconsistency)) +
+  scale_x_discrete(labels = c('LacZ\nancestor', 'pre-adapted\nwith nmc', 'pre-adapted\nwithout nmc')) +
+  scale_color_manual('', values = c('dark grey', 'black')) +
+  scale_fill_manual('', values = c('dark grey', 'black'))
+
+
+phenotype_plot <- plot1 + {V_E_plot + r_plot + I_plot} + plot_layout(nrow = 2, heights = c(0.6, 0.4))
+
+# save plot, other ways are available
+ggsave(file.path(path_fig, 'biolog.png'), phenotype_plot, height = 12, width = 14)
+ggsave(file.path(path_fig, 'biolog.pdf'), phenotype_plot, height = 12, width = 14)
+
 
 p_V_by_G <- r_plot + I_plot
 
@@ -293,16 +314,85 @@ d <- filter(d, treatment %in% c('individual_clone'))
 
 # plot
 ggplot(d, aes(evolution, fitness)) +
-  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
-  geom_point(fill = 'white', shape = 21, position  = position_jitter(width = 0.1), size = 3) +
-  theme_bw() +
-  xlab('Treatment') +
+  MicrobioUoE::geom_pretty_boxplot(aes(col = evolution, fill = evolution)) +
+  geom_point(aes(col = evolution), fill = 'white', shape = 21, position  = position_jitter(width = 0.1), size = 4) +
+  theme_bw(base_size = 16) +
+  theme(axis.text.x = element_text(size = 16, color = 'black'),
+        legend.position = 'none') +
+  xlab('') +
   ylab('Relative fitness') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  scale_x_discrete(labels = c('pre-adapted\nwith nmc', 'pre-adapted\nwithout nmc')) +
+  scale_color_manual('', values = c('dark grey', 'black')) +
+  scale_fill_manual('', values = c('dark grey', 'black')) +
+  facet_wrap(~preadapt_pop)
+  
+# save plot, other ways are available
+ggsave(file.path(path_fig, 'rel_fitness.png'), last_plot(), height = 5, width = 6)
+ggsave(file.path(path_fig, 'rel_fitness.pdf'), last_plot(), height = 5, width = 6)
 
+# try a normal linear mixed model
 model <- lme4::lmer(fitness ~ evolution + (1|preadapt_pop), d)
+cAIC4::cAIC(model)
 model2 <- lme4::lmer(fitness ~ 1 + (1|preadapt_pop), d)
 anova(model, model2)
 
-# calculate maximum growth rate
+# try a double generalised linear model
+model_dglm <- dglm(fitness ~ evolution, ~1, data = d)
+model_dglm2 <- dglm(fitness ~ evolution + preadapt_pop, ~evolution, data = d)
+summary(model_dglm2)
 
+# try a random double generalised linear model
+model1 <- hglm(fixed = fitness ~ evolution,
+              random = ~1|preadapt_pop,
+              family = gaussian(link = "identity"),
+              disp = ~ evolution,
+              data = d,
+              calc.like = TRUE)
+model2 <- hglm(fixed = fitness ~ evolution,
+               random = ~1|preadapt_pop,
+               family = gaussian(link = "identity"),
+               disp = ~ 1,
+               data = d,
+               calc.like = TRUE)
+
+summary(model1)
+summary(model2)
+# essentially I do not know enough to do this. Maybe a simpler way. Would be cool if I can show this though
+
+d_ranef <- data.frame(ranef =  model1$ranef, 
+                      treat = rep(c('without_comm', 'with_comm'), each = 6)) 
+
+boxplot(ranef~treat, d_ranef)
+
+d_ave <- group_by(d, preadapt_pop, evolution) %>%
+  summarise(mean = mean(fitness),
+            sd = sd(fitness)) %>%
+  ungroup()
+
+gather(d_ave, 'metric', 'value', c(mean, sd)) %>%
+  ggplot(., aes(evolution, value)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(shape = 21, fill = 'white') +
+  facet_wrap(~metric, scales = 'free_y')
+
+mod_mean <- lm(mean ~ evolution, d_ave)
+summary(mod_mean)
+mod_sd <- lm(sd ~ evolution, d_ave)
+summary(mod_sd)
+
+# correct each point by subtracting by the mean of each one
+d <- group_by(d, preadapt_pop) %>%
+  mutate(., fitness_cor = fitness - mean(fitness)) %>%
+  ungroup()
+
+ggplot(d, aes(evolution, fitness_cor)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(fill = 'white', shape = 21, position  = position_jitter(width = 0.1), size = 4) +
+  theme_bw(base_size = 16) +
+  theme(axis.text.x = element_text(size = 16)) +
+  xlab('') +
+  ylab('Relative fitness') +
+  scale_x_discrete(labels = c('pre-adapted\nwith nmc', 'pre-adapted\nwithout nmc'))
+
+bartlett.test(fitness_cor ~ evolution, data = d)
+car::leveneTest(fitness_cor ~ evolution, data = d)
