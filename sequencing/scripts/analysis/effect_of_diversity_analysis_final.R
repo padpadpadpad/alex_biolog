@@ -137,13 +137,20 @@ ps_sub <- prune_samples(to_keep$SampleID, ps2)
 # Bray-Curtis - absolute abundances
 ps_sub_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
 
+# function
+fac_to_letters <- function(fac){
+  
+}
+
 # make a data frame of the sample data
 d_samp <- data.frame(sample_data(ps_sub_prop))
 d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
                  nclones_fac = as.factor(nclones_fac),
                  evol_fac = as.factor(evolution),
-                 preadapt_pop = as.factor(preadapt_pop)) %>%
+                 preadapt_pop = as.factor(preadapt_pop),
+                 pop2 = preadapt_pop) %>%
   column_to_rownames(., 'SampleID')
+levels(d_samp$pop2) <- letters[1:length(levels(d_samp$pop2))]
 
 # calculate distance matrix
 ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
@@ -193,7 +200,38 @@ ggsave(file.path(path_fig, 'ind_clone_relatednes.pdf'), last_plot(), height = 5,
 mod_div_1 <- vegan::adonis(ps_wunifrac ~ evol_fac, data = d_samp, n_perm = 9999)
 mod_betadisper_1 <- betadisper(ps_wunifrac, d_samp$evol_fac)
 
+# this is for what we have relative fitness assays for
+
+# grab the data
+# grab centroids and other data
+d_1 <- get_betadisper_data(mod_betadisper_1)
+
+# combine centroid and eigenvector dataframes for plotting
+betadisper_lines1 <- merge(select(d_1$centroids, group, PCoA1, PCoA2), select(d_1$eigenvector, group, PCoA1, PCoA2), by = c('group'))
+
+# add distances to eigenvector and lines data
+betadisper_lines1 <- mutate(betadisper_lines1, distances = dist_between_points(PCoA1.x, PCoA2.x, PCoA1.y, PCoA2.y))
+d_1$eigenvector$distances <- d_1$distances$distances
+
+d_1_PCs <- merge(d_1$eigenvector, tibble::rownames_to_column(d_samp, 'sample') %>% select(., sample, pop2, density_ml, fitness), by = 'sample')
+
+p1 <- gather(d_1_PCs, 'trait', 'value', c(density_ml, fitness)) %>%
+  gather(., 'PC', 'value2', starts_with('PCoA')) %>%
+  filter(., PC %in% c('PCoA1', 'PCoA2')) %>%
+  ggplot(., aes(value2, value, col = group)) +
+  facet_wrap(~PC + trait, scales = 'free', ncol = 2, labeller = labeller(.multi_line = FALSE)) +
+  geom_text(aes(label = pop2)) +
+  theme_bw(base_size = 16) +
+  ggtitle('Correlation between PCoA and measured traits',
+          subtitle = 'PCoA1 ~ 44% & PCoA2 ~ 21%') +
+  scale_color_manual(values = c('darkgrey', 'black'))
+
+# save plot, other ways are available
+ggsave(file.path(path_fig, 'regress_traits_vs_PCoA.png'), p1, height = 10, width = 12)
+ggsave(file.path(path_fig, 'regress_traits_vs_PCoA.pdf'), p1, height = 10, width = 12)
+
 # 2. 4 related clones ####
+
 
 # filter treatments to keep
 to_keep <- filter(meta_new, treatment %in% c('4_related_clones'))
