@@ -160,19 +160,22 @@ emmeans::emmeans(mod_vg, pairwise ~ evolved)
 # plot genotypic and environmental variance across treatments ####
 # plot V_G and V_E ####
 V_G_plot <- ggplot(V_G_pop, aes(evolved, V_G)) +
-  geom_pretty_boxplot(aes(evolved, V_G), filter(V_G_pop, evolved != 'ancestor'), col = 'black', fill = 'black') +
-  geom_point(aes(evolved, V_G), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_G_pop, evolved != 'ancestor')) +
-  geom_point(aes(evolved, V_G), shape = 21, fill = 'white', size = 5, filter(V_G_pop, evolved == 'ancestor')) +
+  geom_pretty_boxplot(aes(evolved, V_G, col = evolved, fill = evolved), filter(V_G_pop, evolved != 'ancestor')) +
+  geom_point(aes(evolved, V_G, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_G_pop, evolved != 'ancestor')) +
+  geom_point(aes(evolved, V_G), size = 7, col = 'orange', filter(V_G_pop, evolved == 'ancestor')) +
   ylab('genotypic variance') +
   xlab('evolved') +
   theme_bw(base_size = 16) +
   theme(legend.position = 'none') +
-  ggtitle(expression(Genotypic~variance~(V[G])))
+  ggtitle(expression((b)~Genotypic~variance~(V[G]))) +
+  scale_x_discrete(labels = c('LacZ\nancestor', 'pre-adapted\nwith nmc', 'pre-adapted\nwithout nmc')) +
+  scale_color_manual('', values = c('dark grey', 'black')) +
+  scale_fill_manual('', values = c('dark grey', 'black'))
 
 V_E_plot <- ggplot(V_E_pop, aes(evolved, V_E)) +
   geom_pretty_boxplot(aes(evolved, V_E, col = evolved, fill = evolved), filter(V_E_pop, evolved != 'ancestor')) +
   geom_point(aes(evolved, V_E, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_E_pop, evolved != 'ancestor')) +
-  geom_point(aes(evolved, V_E), fill = 'white', size = 7, col = 'orange', filter(V_E_pop, evolved == 'ancestor')) +
+  geom_point(aes(evolved, V_E), size = 7, col = 'orange', filter(V_E_pop, evolved == 'ancestor')) +
   ylab('environmental variance') +
   xlab('') +
   theme_bw(base_size = 16) +
@@ -291,7 +294,7 @@ I_plot <- ggplot(d_inconsist, aes(evolved, I_pop)) +
   scale_fill_manual('', values = c('dark grey', 'black'))
 
 
-phenotype_plot <- plot1 + {V_E_plot + r_plot + I_plot} + plot_layout(nrow = 2, heights = c(0.6, 0.4))
+phenotype_plot <- plot1 + {V_G_plot + r_plot + I_plot} + plot_layout(nrow = 2, heights = c(0.6, 0.4))
 
 # save plot, other ways are available
 ggsave(file.path(path_fig, 'biolog.png'), phenotype_plot, height = 12, width = 14)
@@ -396,3 +399,32 @@ ggplot(d, aes(evolution, fitness_cor)) +
 
 bartlett.test(fitness_cor ~ evolution, data = d)
 car::leveneTest(fitness_cor ~ evolution, data = d)
+
+# stats tests ####
+
+# 1. phenotypic diversity
+mod_vp <- lm(V_P ~ evolved, filter(V_P, evolved != 'ancestor'))
+mod_vp2 <- lm(V_P ~ 1, filter(V_P, evolved != 'ancestor'))
+anova(mod_vp, mod_vp2)
+
+# 2. genotypic diversity
+mod_vg <- lm(V_G ~ evolved, filter(V_G_pop, evolved != 'ancestor'))
+mod_vg2 <- lm(V_G ~ 1, filter(V_G_pop, evolved != 'ancestor'))
+anova(mod_vg, mod_vg2)
+
+# 3. environmental diversity
+mod_ve <- lm(V_E ~ evolved, filter(V_E_pop, evolved != 'ancestor'))
+mod_ve2 <- lm(V_E ~ 1, filter(V_E_pop, evolved != 'ancestor'))
+anova(mod_ve, mod_ve2)
+
+# 4. responsiveness
+mod_r <- lm(R_pop ~ evolved, filter(d_R_pop, evolved != 'ancestor'))
+mod_r2 <- lm(R_pop ~ 1, filter(d_R_pop, evolved != 'ancestor'))
+anova(mod_r, mod_r2)
+
+# 5. inconsistency
+mod_i <- lm(I_pop ~ evolved, filter(d_inconsist, evolved != 'ancestor'))
+mod_i2 <- lm(I_pop ~ 1, filter(d_inconsist, evolved != 'ancestor'))
+anova(mod_i, mod_i2)
+confint(mod_i2)
+filter(d_inconsist, evolved == 'ancestor')
