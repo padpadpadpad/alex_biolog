@@ -94,7 +94,7 @@ plot1 <- ggplot(filter(d_t4_590, mean_od > 0.05)) +
   theme_bw(base_size = 16) +
   theme(legend.position = 'none',
         axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
-  ylab(expression(OD[600])) +
+  ylab(expression(OD[590])) +
   xlab('substrate') +
   scale_color_manual(values = c('orange', 'dark grey', 'black')) +
   ggtitle('(a) Resource-use of pre-adapted clones')
@@ -305,7 +305,66 @@ p_V_by_G <- r_plot + I_plot
 
 # ggsave(file.path(path_fig, 'V_GE_interaction.pdf'), p_V_by_G, height = 6, width = 15)
 
-fit_inconsist <- lm(log(I_pop) ~ evolved, filter(d_inconsist, evolved != 'ancestor'))
+# stats tests ####
+
+# 1. phenotypic diversity
+mod_vp <- lm(V_P ~ evolved, filter(V_P, evolved != 'ancestor'))
+mod_vp2 <- lm(V_P ~ 1, filter(V_P, evolved != 'ancestor'))
+anova(mod_vp, mod_vp2)
+
+# do both a t test and mann whitney u test for significance
+vp_t <- t.test(filter(V_P, evolved != 'ancestor') %>% pull(V_P), 
+               mu = filter(V_P, evolved == 'ancestor') %>% pull(V_P))
+vp_mw <- wilcox.test(filter(V_P, evolved != 'ancestor') %>% pull(V_P), 
+                mu = filter(V_P, evolved == 'ancestor') %>% pull(V_P))
+
+
+# 2. genotypic diversity
+mod_vg <- lm(V_G ~ evolved, filter(V_G_pop, evolved != 'ancestor'))
+mod_vg2 <- lm(V_G ~ 1, filter(V_G_pop, evolved != 'ancestor'))
+anova(mod_vg, mod_vg2)
+vg_t <- t.test(filter(V_G_pop, evolved != 'ancestor') %>% pull(V_G), 
+               mu = filter(V_G_pop, evolved == 'ancestor') %>% pull(V_G))
+vg_mw <- wilcox.test(filter(V_G_pop, evolved != 'ancestor') %>% pull(V_G), 
+                     mu = filter(V_G_pop, evolved == 'ancestor') %>% pull(V_G))
+
+# 3. environmental diversity
+mod_ve <- lm(V_E ~ evolved, filter(V_E_pop, evolved != 'ancestor'))
+mod_ve2 <- lm(V_E ~ 1, filter(V_E_pop, evolved != 'ancestor'))
+anova(mod_ve, mod_ve2)
+ve_t <- t.test(filter(V_E_pop, evolved != 'ancestor') %>% pull(V_E), 
+               mu = filter(V_E_pop, evolved == 'ancestor') %>% pull(V_E))
+ve_mw <- wilcox.test(filter(V_E_pop, evolved != 'ancestor') %>% pull(V_E), 
+                     mu = filter(V_E_pop, evolved == 'ancestor') %>% pull(V_E))
+
+# 4. responsiveness
+mod_r <- lm(R_pop ~ evolved, filter(d_R_pop, evolved != 'ancestor'))
+mod_r2 <- lm(R_pop ~ 1, filter(d_R_pop, evolved != 'ancestor'))
+anova(mod_r, mod_r2)
+r_t <- t.test(filter(d_R_pop, evolved != 'ancestor') %>% pull(R_pop), 
+               mu = filter(d_R_pop, evolved == 'ancestor') %>% pull(R_pop))
+r_mw <- wilcox.test(filter(d_R_pop, evolved != 'ancestor') %>% pull(R_pop), 
+                     mu = filter(d_R_pop, evolved == 'ancestor') %>% pull(R_pop))
+
+
+# 5. inconsistency
+mod_i <- lm(I_pop ~ evolved, filter(d_inconsist, evolved != 'ancestor'))
+mod_i2 <- lm(I_pop ~ 1, filter(d_inconsist, evolved != 'ancestor'))
+anova(mod_i, mod_i2)
+i_t <- t.test(filter(d_inconsist, evolved != 'ancestor') %>% pull(I_pop), 
+              mu = filter(d_inconsist, evolved == 'ancestor') %>% pull(I_pop))
+i_mw <- wilcox.test(filter(d_inconsist, evolved != 'ancestor') %>% pull(I_pop), 
+                    mu = filter(d_inconsist, evolved == 'ancestor') %>% pull(I_pop))
+
+# tibble
+d_pvals <- tibble(var = c('V_P', 'V_G', 'V_E', 'r', 'I'),
+                  raw_pval = c(vp_mw$p.value, vg_mw$p.value, ve_mw$p.value, r_mw$p.value, i_mw$p.value)) %>%
+  mutate(., bonf = p.adjust(raw_pval, 'bonf'))
+
+
+#---------------------------------#
+# analysis of relative fitness ####
+#---------------------------------#
 
 # plot of fitness
 
@@ -328,7 +387,7 @@ ggplot(d, aes(evolution, fitness)) +
   scale_color_manual('', values = c('dark grey', 'black')) +
   scale_fill_manual('', values = c('dark grey', 'black')) +
   facet_wrap(~preadapt_pop)
-  
+
 # save plot, other ways are available
 ggsave(file.path(path_fig, 'rel_fitness.png'), last_plot(), height = 5, width = 6)
 ggsave(file.path(path_fig, 'rel_fitness.pdf'), last_plot(), height = 5, width = 6)
@@ -346,11 +405,11 @@ summary(model_dglm2)
 
 # try a random double generalised linear model
 model1 <- hglm(fixed = fitness ~ evolution,
-              random = ~1|preadapt_pop,
-              family = gaussian(link = "identity"),
-              disp = ~ evolution,
-              data = d,
-              calc.like = TRUE)
+               random = ~1|preadapt_pop,
+               family = gaussian(link = "identity"),
+               disp = ~ evolution,
+               data = d,
+               calc.like = TRUE)
 model2 <- hglm(fixed = fitness ~ evolution,
                random = ~1|preadapt_pop,
                family = gaussian(link = "identity"),
@@ -399,32 +458,3 @@ ggplot(d, aes(evolution, fitness_cor)) +
 
 bartlett.test(fitness_cor ~ evolution, data = d)
 car::leveneTest(fitness_cor ~ evolution, data = d)
-
-# stats tests ####
-
-# 1. phenotypic diversity
-mod_vp <- lm(V_P ~ evolved, filter(V_P, evolved != 'ancestor'))
-mod_vp2 <- lm(V_P ~ 1, filter(V_P, evolved != 'ancestor'))
-anova(mod_vp, mod_vp2)
-
-# 2. genotypic diversity
-mod_vg <- lm(V_G ~ evolved, filter(V_G_pop, evolved != 'ancestor'))
-mod_vg2 <- lm(V_G ~ 1, filter(V_G_pop, evolved != 'ancestor'))
-anova(mod_vg, mod_vg2)
-
-# 3. environmental diversity
-mod_ve <- lm(V_E ~ evolved, filter(V_E_pop, evolved != 'ancestor'))
-mod_ve2 <- lm(V_E ~ 1, filter(V_E_pop, evolved != 'ancestor'))
-anova(mod_ve, mod_ve2)
-
-# 4. responsiveness
-mod_r <- lm(R_pop ~ evolved, filter(d_R_pop, evolved != 'ancestor'))
-mod_r2 <- lm(R_pop ~ 1, filter(d_R_pop, evolved != 'ancestor'))
-anova(mod_r, mod_r2)
-
-# 5. inconsistency
-mod_i <- lm(I_pop ~ evolved, filter(d_inconsist, evolved != 'ancestor'))
-mod_i2 <- lm(I_pop ~ 1, filter(d_inconsist, evolved != 'ancestor'))
-anova(mod_i, mod_i2)
-confint(mod_i2)
-filter(d_inconsist, evolved == 'ancestor')
