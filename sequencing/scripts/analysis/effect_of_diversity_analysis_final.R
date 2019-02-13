@@ -473,6 +473,10 @@ p2 <- ggplot(betadisper_dat$eigenvector, aes(forcats::fct_relevel(group, c('lacz
   scale_fill_viridis_d() +
   scale_x_discrete(labels = c('LacZ\nancestor', 'single\nclone', '4 clones', '24 clones'))
 
+group_by(betadisper_dat$eigenvector, group) %>%
+  summarise(above_1 = sum(PCoA1 > 0)/n())
+  
+
 # screeplot
 p_scree <- ggplot() +
   geom_line(aes(readr::parse_number(PCoA), eig), betadisper_dat$eigenvalue) +

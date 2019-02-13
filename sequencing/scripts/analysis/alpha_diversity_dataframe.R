@@ -49,11 +49,11 @@ a_div <- estimate_richness(ps) %>%
   merge(., m, by = 'sample_id') %>%
   mutate_at(., c('sample_id', 'treatment', 'sample_name', 'evolution'), as.character) 
 
-a_div <- select(a_div, sample_id, treatment, evolution, preadapt_pop, observed, pielou) %>%
+a_div <- select(a_div, sample_id, treatment, evolution, preadapt_pop, observed, pielou, inv_simpson) %>%
   filter(treatment != 'wt_ancestor')
 
 # first plot of observed OTUs and evenness ####
-gather(a_div, 'metric', 'value', c(observed, pielou)) %>%
+gather(a_div, 'metric', 'value', c(observed, pielou, inv_simpson)) %>%
   ggplot(., aes(treatment, value)) +
   MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
   geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15), size = 3) +

@@ -1,0 +1,153 @@
+###########################################
+# This is the output file from the sequencing analysis for the Pseudomonas paper when the transformation used was: sqrt and the distance metric used was: wunifrac 
+###########################################
+
+#############################
+# Analysis of individual clones, difference between pre-adaptation history
+#############################
+
+# permutational ANOVA
+
+Call:
+vegan::adonis(formula = ps_dist ~ evol_fac, data = d_samp, n_perm = 9999) 
+
+Permutation: free
+Number of permutations: 999
+
+Terms added sequentially (first to last)
+
+          Df SumsOfSqs   MeanSqs F.Model      R2 Pr(>F)
+evol_fac   1  0.005653 0.0056525 0.91043 0.01941  0.449
+Residuals 46  0.285597 0.0062086         0.98059       
+Total     47  0.291250                   1.00000       
+
+# Homogeneity of variances
+Analysis of Variance Table
+
+Response: Distances
+          Df   Sum Sq   Mean Sq F value Pr(>F)
+Groups     1 0.002776 0.0027761  2.1004  0.154
+Residuals 46 0.060800 0.0013218               
+
+#############################
+# Analysis of four clone mixes, difference between pre-adaptation history
+#############################
+
+# permutational ANOVA
+
+Call:
+vegan::adonis(formula = ps_dist ~ evol_fac, data = d_samp, n_perm = 9999) 
+
+Permutation: free
+Number of permutations: 999
+
+Terms added sequentially (first to last)
+
+          Df SumsOfSqs   MeanSqs F.Model      R2 Pr(>F)
+evol_fac   1  0.006641 0.0066413  1.9128 0.17528  0.178
+Residuals  9  0.031248 0.0034720         0.82472       
+Total     10  0.037890                   1.00000       
+
+# Homogeneity of variances
+Analysis of Variance Table
+
+Response: Distances
+          Df    Sum Sq   Mean Sq F value  Pr(>F)  
+Groups     1 0.0041286 0.0041286  4.7839 0.05651 .
+Residuals  9 0.0077672 0.0008630                  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#############################
+# Analysis of 24 clone mixes, difference between pre-adaptation history
+#############################
+
+# permutational ANOVA
+
+Call:
+vegan::adonis(formula = ps_dist ~ evol_fac, data = d_samp, n_perm = 9999) 
+
+Permutation: free
+Number of permutations: 999
+
+Terms added sequentially (first to last)
+
+          Df SumsOfSqs   MeanSqs F.Model      R2 Pr(>F)  
+evol_fac   1 0.0027669 0.0027669  2.0669 0.17129  0.053 .
+Residuals 10 0.0133866 0.0013387         0.82871         
+Total     11 0.0161535                   1.00000         
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+# Homogeneity of variances
+Analysis of Variance Table
+
+Response: Distances
+          Df     Sum Sq    Mean Sq F value Pr(>F)
+Groups     1 0.00000092 9.1700e-07  0.0079 0.9309
+Residuals 10 0.00115942 1.1594e-04               
+
+#############################
+# Analysis of all clones mixes, ignoring pre-adaptation history
+#############################
+
+# permutational ANOVA
+
+Call:
+vegan::adonis(formula = ps_dist ~ nclones_fac, data = d_samp,      n_perm = 9999) 
+
+Permutation: free
+Number of permutations: 999
+
+Terms added sequentially (first to last)
+
+            Df SumsOfSqs   MeanSqs F.Model      R2 Pr(>F)  
+nclones_fac  3   0.03263 0.0108763  1.8524 0.06137  0.047 *
+Residuals   85   0.49907 0.0058714         0.93863         
+Total       88   0.53170                   1.00000         
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+# Homogeneity of variances
+Analysis of Variance Table
+
+Response: Distances
+          Df   Sum Sq    Mean Sq F value Pr(>F)
+Groups     3 0.002732 0.00091068  0.7175 0.5442
+Residuals 85 0.107883 0.00126921               
+
+# Multiple comparisons from the pairwise PERMANOVA
+                        contrast     R2  pval pvalBon pvalFDR pvalHolm pvalHochberg pvalHommel
+1     single clone vs. 24 clones 0.0540 0.016   0.098   0.049    0.081        0.081      0.065
+2      single clone vs. 4 clones 0.0086 0.660   3.900   0.660    0.710        0.660      0.660
+3 single clone vs. LacZ ancestor 0.0190 0.360   2.100   0.430    0.710        0.660      0.660
+4         24 clones vs. 4 clones 0.0960 0.013   0.077   0.077    0.077        0.077      0.060
+5    24 clones vs. LacZ ancestor 0.1500 0.024   0.140   0.048    0.096        0.096      0.096
+6     4 clones vs. LacZ ancestor 0.0510 0.190   1.100   0.280    0.570        0.570      0.530
+
+#############################
+# Analysis of allopatry vs sympatric populations in 4 clone populations
+#############################
+
+# permutational ANOVA
+
+Call:
+vegan::adonis(formula = ps_dist ~ treatment_fac, data = d_samp,      n_perm = 9999) 
+
+Permutation: free
+Number of permutations: 999
+
+Terms added sequentially (first to last)
+
+              Df SumsOfSqs   MeanSqs F.Model      R2 Pr(>F)
+treatment_fac  1  0.003417 0.0034175 0.54142 0.02513  0.652
+Residuals     21  0.132552 0.0063120         0.97487       
+Total         22  0.135970                   1.00000       
+
+# Homogeneity of variances
+Analysis of Variance Table
+
+Response: Distances
+          Df   Sum Sq    Mean Sq F value Pr(>F)
+Groups     1 0.000337 0.00033691  0.1815 0.6744
+Residuals 21 0.038980 0.00185618               

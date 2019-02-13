@@ -1,0 +1,7 @@
+"contrast","R2","pval","pvalBon","pvalFDR","pvalHolm","pvalHochberg","pvalHommel"
+"single clone vs. 24 clones",0.047,0.019,0.11,0.038,0.076,0.076,0.076
+"single clone vs. 4 clones",0.012,0.52,3.1,0.52,0.52,0.52,0.52
+"single clone vs. LacZ ancestor",0.03,0.13,0.75,0.15,0.25,0.25,0.25
+"24 clones vs. 4 clones",0.08,0.0074,0.044,0.044,0.044,0.044,0.037
+"24 clones vs. LacZ ancestor",0.17,0.0094,0.056,0.028,0.047,0.047,0.047
+"4 clones vs. LacZ ancestor",0.064,0.073,0.44,0.11,0.22,0.22,0.19

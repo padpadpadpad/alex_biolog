@@ -318,6 +318,7 @@ vp_t <- t.test(filter(V_P, evolved != 'ancestor') %>% pull(V_P),
 vp_mw <- wilcox.test(filter(V_P, evolved != 'ancestor') %>% pull(V_P), 
                 mu = filter(V_P, evolved == 'ancestor') %>% pull(V_P))
 
+sum(filter(V_P, evolved != 'ancestor') %>% pull(V_P) > filter(V_P, evolved == 'ancestor') %>% pull(V_P))/length(filter(V_P, evolved != 'ancestor') %>% pull(V_P)) *100
 
 # 2. genotypic diversity
 mod_vg <- lm(V_G ~ evolved, filter(V_G_pop, evolved != 'ancestor'))
@@ -327,6 +328,9 @@ vg_t <- t.test(filter(V_G_pop, evolved != 'ancestor') %>% pull(V_G),
                mu = filter(V_G_pop, evolved == 'ancestor') %>% pull(V_G))
 vg_mw <- wilcox.test(filter(V_G_pop, evolved != 'ancestor') %>% pull(V_G), 
                      mu = filter(V_G_pop, evolved == 'ancestor') %>% pull(V_G))
+
+sum(filter(V_G_pop, evolved != 'ancestor') %>% pull(V_G) > filter(V_G_pop, evolved == 'ancestor') %>% pull(V_G))/length(filter(V_G_pop, evolved != 'ancestor') %>% pull(V_G)) *100
+
 
 # 3. environmental diversity
 mod_ve <- lm(V_E ~ evolved, filter(V_E_pop, evolved != 'ancestor'))
@@ -345,7 +349,7 @@ r_t <- t.test(filter(d_R_pop, evolved != 'ancestor') %>% pull(R_pop),
                mu = filter(d_R_pop, evolved == 'ancestor') %>% pull(R_pop))
 r_mw <- wilcox.test(filter(d_R_pop, evolved != 'ancestor') %>% pull(R_pop), 
                      mu = filter(d_R_pop, evolved == 'ancestor') %>% pull(R_pop))
-
+sum(filter(d_R_pop, evolved != 'ancestor') %>% pull(R_pop) > filter(d_R_pop, evolved == 'ancestor') %>% pull(R_pop))/length(filter(d_R_pop, evolved != 'ancestor') %>% pull(R_pop)) *100
 
 # 5. inconsistency
 mod_i <- lm(I_pop ~ evolved, filter(d_inconsist, evolved != 'ancestor'))
@@ -355,6 +359,7 @@ i_t <- t.test(filter(d_inconsist, evolved != 'ancestor') %>% pull(I_pop),
               mu = filter(d_inconsist, evolved == 'ancestor') %>% pull(I_pop))
 i_mw <- wilcox.test(filter(d_inconsist, evolved != 'ancestor') %>% pull(I_pop), 
                     mu = filter(d_inconsist, evolved == 'ancestor') %>% pull(I_pop))
+sum(filter(d_inconsist, evolved != 'ancestor') %>% pull(I_pop) > filter(d_inconsist, evolved == 'ancestor') %>% pull(I_pop))/length(filter(d_inconsist, evolved != 'ancestor') %>% pull(I_pop)) *100
 
 # tibble
 d_pvals <- tibble(var = c('V_P', 'V_G', 'V_E', 'r', 'I'),
