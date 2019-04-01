@@ -14,6 +14,8 @@ library(ggridges)
 library(tibble)
 library(patchwork) # devtools::install_github('thomasp85/patchwork')
 library(lme4)
+library(htmltools)
+library(gt)
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
 #--------------#
@@ -410,6 +412,46 @@ mult_comp_to_save <- mutate(mult_comp, X1 = forcats::fct_recode(X1, `single clon
   select(., contrast, everything(),-c(X1, X2)) %>%
   mutate_at(., vars(2:ncol(.)), function(x) signif(x, 2))
 
+# make html table
+gt(mult_comp_to_save) %>%
+  cols_align('center') %>%
+  cols_label(R2 = html("R<sup>2</sup>"),
+             pval = "p value",
+             pvalBon = 'Bonferroni',
+             pvalFDR = 'fdr',
+             pvalHolm = 'Holm',
+             pvalHochberg = 'Hochberg',
+             pvalHommel = 'Hommel') %>%
+  tab_style(
+    style = cells_styles(
+      text_weight = "bold"),
+    locations = cells_data(
+      columns = vars(pval),
+      rows = pval < 0.05)
+  ) %>%
+  tab_style(
+    style = cells_styles(
+      text_weight = "bold"),
+    locations = cells_data(
+      columns = vars(pval),
+      rows = pval < 0.05)
+  ) %>%
+  tab_style(
+    style = cells_styles(
+      text_weight = "bold"),
+    locations = cells_data(
+      columns = vars(pvalBon),
+      rows = pvalBon < 0.05)
+  ) %>%
+  tab_style(
+    style = cells_styles(
+      text_weight = "bold"),
+    locations = cells_data(
+      columns = vars(pval),
+      rows = pval < 0.05)
+  )
+
+
 # save multiple comparisons out
 write.csv(mult_comp_to_save, paste('sequencing/data/output/',metric, '_mult_comp.csv', sep = ''), row.names = FALSE)
 
@@ -523,3 +565,43 @@ mod_betadisper <- betadisper(ps_wunifrac, d_samp$treatment_fac)
 plot(mod_betadisper)
 
 # not significant but need to make the plot
+
+# make table of effect of pre-adaptation ####
+d_table <- tibble(clone = c(1, 4, 24), mod = list(mod_div_1, mod_div_4, mod_div_24))
+
+tidy_adonis <- function(adonis_mod){
+  stuff <- adonis_mod$aov.tab %>% data.frame(stringsAsFactors = FALSE) %>%
+    tibble::rownames_to_column(var = 'factor') %>%
+    janitor::clean_names() %>%
+    rename(p_value = pr_f)
+  return(stuff)
+}
+
+d_table <- mutate(d_table, output = purrr::map(mod, tidy_adonis)) %>%
+  unnest(output) %>%
+  filter(., factor != 'Total') %>%
+  spread(factor, df) %>%
+  fill(., Residuals, .direction = 'up') %>%
+  filter(!is.na(p_value)) %>%
+  unite(., 'd.f.', c(evol_fac, Residuals), sep = ', ') %>%
+  select(clone, f_model, `d.f.`, r2, p_value) %>%
+  mutate_at(., vars(f_model, r2), function(x) round(x, 2))
+
+table <- gt(d_table) %>%
+  cols_align('center') %>%
+  cols_label(clone = 'Clonal diversity',
+             f_model = "F statistic",
+             `d.f.` = md('*d.f.*'),
+             r2 = html("R<sup>2</sup>"),
+             p_value = "p value") %>%
+  gt:::as.tags.gt_tbl()
+
+# change font
+table[[1]]$children[[1]] <- gsub(
+  "font-family: [[:print:]]*\n",
+  "font-famuly: 'Times New Roman';\n",
+  table[[1]]$children[[1]]
+)
+
+html_print(table)
+  

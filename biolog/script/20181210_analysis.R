@@ -364,12 +364,25 @@ sum(filter(d_inconsist, evolved != 'ancestor') %>% pull(I_pop) > filter(d_incons
 # tibble
 d_pvals <- tibble(var = c('V_P', 'V_G', 'V_E', 'r', 'I'),
                   raw_pval = c(vp_mw$p.value, vg_mw$p.value, ve_mw$p.value, r_mw$p.value, i_mw$p.value)) %>%
-  mutate(., bonf = p.adjust(raw_pval, 'bonf'))
+  mutate(., fdr = p.adjust(raw_pval, 'fdr'),
+         bonf = p.adjust(raw_pval, 'bonferroni'))
 
 
 #---------------------------------#
 # analysis of relative fitness ####
 #---------------------------------#
+
+# filter top 4 substrates per clone
+d_top <- group_by(d_t4_590, sample) %>%
+  top_n(., n = 1, wt = od_cor) %>%
+  ungroup() %>%
+  unite(., id, c(population, sample), sep = '_', remove = FALSE)
+
+
+mod1 <- lme4::lmer(od_cor ~ 0 + evolved + (1|population), d_top)
+mod_brms <- brms::brm(od_cor ~ 0 + evolved + (1|population), d_top)
+
+brms::marginal_effects(mod_brms)
 
 # plot of fitness
 
