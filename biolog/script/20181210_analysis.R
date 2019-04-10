@@ -96,7 +96,7 @@ plot1 <- ggplot(filter(d_t4_590, mean_od > 0.05)) +
         axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
   ylab(expression(OD[590])) +
   xlab('substrate') +
-  scale_color_manual(values = c('orange', 'dark grey', 'black')) +
+  scale_color_manual(values = c('#e41a1c', 'dark grey', 'black')) +
   ggtitle('(a) Resource-use of pre-adapted clones')
 
 ggsave(file.path(path_fig, 'performance_plot.pdf'), plot1, height = 10, width = 10)
@@ -162,7 +162,7 @@ emmeans::emmeans(mod_vg, pairwise ~ evolved)
 V_G_plot <- ggplot(V_G_pop, aes(evolved, V_G)) +
   geom_pretty_boxplot(aes(evolved, V_G, col = evolved, fill = evolved), filter(V_G_pop, evolved != 'ancestor')) +
   geom_point(aes(evolved, V_G, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_G_pop, evolved != 'ancestor')) +
-  geom_point(aes(evolved, V_G), size = 7, col = 'orange', filter(V_G_pop, evolved == 'ancestor')) +
+  geom_point(aes(evolved, V_G), size = 7, col = '#e41a1c', filter(V_G_pop, evolved == 'ancestor')) +
   ylab('genotypic variance') +
   xlab('evolved') +
   theme_bw(base_size = 16) +
@@ -175,7 +175,7 @@ V_G_plot <- ggplot(V_G_pop, aes(evolved, V_G)) +
 V_E_plot <- ggplot(V_E_pop, aes(evolved, V_E)) +
   geom_pretty_boxplot(aes(evolved, V_E, col = evolved, fill = evolved), filter(V_E_pop, evolved != 'ancestor')) +
   geom_point(aes(evolved, V_E, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_E_pop, evolved != 'ancestor')) +
-  geom_point(aes(evolved, V_E), size = 7, col = 'orange', filter(V_E_pop, evolved == 'ancestor')) +
+  geom_point(aes(evolved, V_E), size = 7, col = '#e41a1c', filter(V_E_pop, evolved == 'ancestor')) +
   ylab('environmental variance') +
   xlab('') +
   theme_bw(base_size = 16) +
@@ -243,7 +243,7 @@ d_R_pop <- group_by(d_R, evolved, population) %>%
 r_plot <- ggplot(d_R_pop, aes(evolved, R_pop)) +
   geom_pretty_boxplot(aes(evolved, R_pop, col = evolved, fill = evolved), filter(d_R_pop, evolved != 'ancestor')) +
   geom_point(aes(evolved, R_pop, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(d_R_pop, evolved != 'ancestor')) +
-  geom_point(aes(evolved, R_pop), col = 'orange', size = 7, filter(d_R_pop, evolved == 'ancestor')) +
+  geom_point(aes(evolved, R_pop), col = '#e41a1c', size = 7, filter(d_R_pop, evolved == 'ancestor')) +
   ylab('responsiveness') +
   xlab('') +
   theme_bw(base_size = 16) +
@@ -282,7 +282,7 @@ d_inconsist <- merge(d_pearson, sd_i_clone, by = c('evolved', 'population', 'clo
 I_plot <- ggplot(d_inconsist, aes(evolved, I_pop)) +
   geom_pretty_boxplot(aes(evolved, I_pop, col = evolved, fill = evolved), filter(d_inconsist, evolved != 'ancestor')) +
   geom_point(aes(evolved, I_pop, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(d_inconsist, evolved != 'ancestor')) +
-  geom_point(aes(evolved, I_pop), col = 'orange', size = 7, filter(d_inconsist, evolved == 'ancestor')) +
+  geom_point(aes(evolved, I_pop), col = '#e41a1c', size = 7, filter(d_inconsist, evolved == 'ancestor')) +
   ylab('Inconsistency') +
   xlab('') +
   theme_bw(base_size = 16) +

@@ -14,8 +14,9 @@ library(ggridges)
 library(tibble)
 library(patchwork) # devtools::install_github('thomasp85/patchwork')
 library(lme4)
-library(htmltools)
-library(gt)
+library(flextable)
+library(webshot)
+library(rmarkdown)
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
 #--------------#
@@ -339,10 +340,8 @@ facet <- c(C_1 = '(a) single clone', C_4 = '(b) 4 clones', C_24 = '(c) 24 clones
 # plot PCoA
 fig_preadapt <- ggplot() +
   # add negative control and lacz ancestor into background
-  geom_point(aes(PCoA1, PCoA2, alpha = 1 - distances), select(filter(d_fig_preadapt$eigenvector, evol %in% c('negative_control')), -nclones), size = 0.75, col = 'blue', alpha = 0.2) +
-  geom_point(aes(PCoA1, PCoA2), select(filter(d_fig_preadapt$centroids, evol %in% c('negative_control')), -nclones), size = 5, col = 'blue', alpha = 0.2) +
-  geom_point(aes(PCoA1, PCoA2, alpha = 1 - distances), select(filter(d_fig_preadapt$eigenvector, evol %in% c('lacz_ancestor')), -nclones), size = 0.75, col = 'orange', alpha = 0.2) +
-  geom_point(aes(PCoA1, PCoA2), select(filter(d_fig_preadapt$centroids, evol %in% c('lacz_ancestor')), -nclones), size = 5, col = 'orange', alpha = 0.2) +
+  geom_point(aes(PCoA1, PCoA2, alpha = 1 - distances), select(filter(d_fig_preadapt$eigenvector, evol %in% c('lacz_ancestor')), -nclones), size = 0.75, col = '#e41a1c', alpha = 0.4) +
+  geom_point(aes(PCoA1, PCoA2), select(filter(d_fig_preadapt$centroids, evol %in% c('lacz_ancestor')), -nclones), size = 5, col = '#e41a1c', alpha = 0.4) +
   # add points from preadapted clone treatments
   geom_point(aes(PCoA1, PCoA2, col = evol, alpha = 1 - distances), filter(d_fig_preadapt$eigenvector, ! evol %in% c('lacz_ancestor', 'negative_control')), size = 1) +
   geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(filter(betadisper_lines, ! evol %in% c('lacz_ancestor', 'negative_control'))), col = evol, alpha = 1 - distances), filter(betadisper_lines, ! evol %in% c('lacz_ancestor', 'negative_control'))) +
@@ -367,8 +366,10 @@ ggsave(file.path(path_fig, 'effect_of_preadapt_history.pdf'), fig_preadapt, heig
 
 # change some values of nclones
 meta_new <- sample_data(ps2) %>% data.frame() %>%
-  mutate(., n_clones = paste('C_', n_clones, sep = '')) %>%
-  mutate(., n_clones = ifelse(treatment == 'lacz_ancestor', 'lacz_ancest', n_clones))
+  mutate(., n_clones = paste('C_', readr::parse_number(n_clones), sep = '')) %>%
+  mutate(., n_clones = case_when(treatment == 'lacz_ancestor' ~ 'lacz_ancest',
+                                 treatment == 'negative_control' ~ 'C_high',
+                                 TRUE ~ as.character(n_clones)))
 row.names(meta_new) <- meta_new$SampleID
 sample_data(ps2) <- sample_data(meta_new)
 
@@ -394,63 +395,65 @@ d_samp <- mutate(d_samp,
   column_to_rownames(., 'SampleID')
 
 # run an Adonis test
-mod_nclonefac <-  vegan::adonis(ps_dist ~ nclones_fac, data = d_samp, n_perm = 9999)
+mod_nclonefac <- vegan::adonis(ps_dist ~ nclones_fac, data = d_samp, n_perm = 9999)
 
 # run a multiple comparison to see which treatments are different
-mult_comp <- mctoolsr::calc_pairwise_permanovas(ps_dist, d_samp, 'nclones_fac', n_perm = 9999) %>%
-  mutate(., pvalHolm = p.adjust(pval, method = 'holm'),
-         pvalHochberg = p.adjust(pval, method = 'hochberg'),
-         pvalHommel = p.adjust(pval, method = 'hommel'))
+mult_comp <- mctoolsr::calc_pairwise_permanovas(ps_dist, d_samp, 'nclones_fac', n_perm = 9999)
 
-mult_comp_to_save <- mutate(mult_comp, X1 = forcats::fct_recode(X1, `single clone` = 'C_1',
+d_num <- group_by(d_samp, nclones_fac) %>% tally()
+
+mult_comp_to_save <- merge(mult_comp, rename(d_num, X1 = nclones_fac, n_1 = n), by = 'X1') %>%
+  merge(., rename(d_num, X2 = nclones_fac, n_2 = n), by = 'X2') %>%
+  unite(., 'n', c(n_1, n_2), sep = ', ') %>%
+  mutate(., X1 = forcats::fct_recode(X1, `single clone` = 'C_1',
                                                                 `4 clones` = 'C_4',
-                                                                `24 clones` = 'C_24'),
+                                                                `24 clones` = 'C_24',
+                                     `negative control` = 'C_high'),
                             X2 = forcats::fct_recode(X2, `LacZ ancestor` = 'lacz_ancest',
                                                      `4 clones` = 'C_4',
-                                                     `24 clones` = 'C_24'),
+                                                     `24 clones` = 'C_24',
+                                                     `negative control` = 'C_high'),
                             contrast = paste(X1, 'vs.', X2, sep = ' ')) %>%
-  select(., contrast, everything(),-c(X1, X2)) %>%
-  mutate_at(., vars(2:ncol(.)), function(x) signif(x, 2))
+  select(., contrast, n, everything(),-c(X1, X2)) %>%
+  mutate_at(., vars(3:ncol(.)), function(x) signif(x, 2)) %>%
+  arrange(desc(contrast))
 
-# make html table
-gt(mult_comp_to_save) %>%
-  cols_align('center') %>%
-  cols_label(R2 = html("R<sup>2</sup>"),
-             pval = "p value",
-             pvalBon = 'Bonferroni',
-             pvalFDR = 'fdr',
-             pvalHolm = 'Holm',
-             pvalHochberg = 'Hochberg',
-             pvalHommel = 'Hommel') %>%
-  tab_style(
-    style = cells_styles(
-      text_weight = "bold"),
-    locations = cells_data(
-      columns = vars(pval),
-      rows = pval < 0.05)
-  ) %>%
-  tab_style(
-    style = cells_styles(
-      text_weight = "bold"),
-    locations = cells_data(
-      columns = vars(pval),
-      rows = pval < 0.05)
-  ) %>%
-  tab_style(
-    style = cells_styles(
-      text_weight = "bold"),
-    locations = cells_data(
-      columns = vars(pvalBon),
-      rows = pvalBon < 0.05)
-  ) %>%
-  tab_style(
-    style = cells_styles(
-      text_weight = "bold"),
-    locations = cells_data(
-      columns = vars(pval),
-      rows = pval < 0.05)
-  )
+# make table
+super_fp <- officer::fp_text(vertical.align = "superscript", font.size = 8, font.family = 'Times')
+sub_fp <- officer::fp_text(vertical.align = "subscript", font.size = 8, font.family = 'Times')
+italic_fp <- officer::fp_text(italic = TRUE, font.size = 16, font.family = 'Times')
 
+table <- flextable(select(mult_comp_to_save, contrast, n, R2, pval, pvalFDR)) %>%
+  align(j = c('contrast'), align = 'left', part = 'all') %>%
+  align(j = c('R2', 'pval', 'pvalFDR', 'n'), align = 'center', part = 'all') %>%
+  add_footer_row(., colwidths = 5, values = '') %>% 
+  bold(i = ~ pval < 0.05, j = ~ pval) %>%
+  bold(i = ~ pvalFDR < 0.05, j = ~ pvalFDR) %>%
+  set_header_labels(n = 'number of samples per treatment',
+                    pval = "raw p value") %>%
+  compose(., j = "R2", part = "header", 
+          value = as_paragraph("R", as_chunk("2", props = super_fp))) %>%
+  compose(., j = "pvalFDR", part = "header", 
+          value = as_paragraph("p", as_chunk("adj", props = sub_fp))) %>%
+  compose(., j = "contrast", part = "footer", 
+          value = as_paragraph("p", as_chunk("adj", props = sub_fp), 'was calculated using the false discovery rate method')) %>%
+  font(fontname = 'Times', part = 'all') %>%
+  fontsize(size = 16, part = 'all') %>%
+  autofit() %>%
+  padding(padding.top = 5, part = 'footer')
+
+# save as a png ####
+# create an Rmd file
+rmd_name <- tempfile(fileext = ".Rmd")
+cat("```{r echo=FALSE}\ntable\n```", file = rmd_name)
+
+# render as an html file ----
+html_name <- tempfile(fileext = ".html")
+render(rmd_name, output_format = "html_document", output_file = html_name )
+
+# get a png from the html file with webshot ----
+webshot(html_name, zoom = 2, file = "table_3.png", 
+        selector = "body > div.container-fluid.main-container > div.tabwid > table")
 
 # save multiple comparisons out
 write.csv(mult_comp_to_save, paste('sequencing/data/output/',metric, '_mult_comp.csv', sep = ''), row.names = FALSE)
@@ -493,27 +496,29 @@ betadisper_dat$eigenvector$distances <- betadisper_dat$distances$distances
 
 # plot PCoA
 p1 <- ggplot() +
-  geom_point(aes(PCoA1, PCoA2, col = forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24'))), betadisper_dat$eigenvector, size = 1.5) +
-  ggConvexHull::geom_convexhull(aes(PCoA1, PCoA2, col = group, group = group), betadisper_dat$eigenvector, alpha = 0) +
+  geom_point(aes(PCoA1, PCoA2, col = forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24', 'C_high')), alpha = 0.5 - distances), betadisper_dat$eigenvector, size = 1.5) +
+  geom_segment(aes(x = PCoA1.x, y = PCoA2.x, yend = PCoA2.y, xend = PCoA1.y, group = row.names(betadisper_lines), col = forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24', 'C_high')), alpha = 0.5 - distances), betadisper_lines) +
   geom_point(aes(PCoA1, PCoA2, col = group), betadisper_dat$centroids, size = 7) +
   theme_bw(base_size = 16, base_family = 'Helvetica') +
-  ylab('PCoA Axis 2 (19.2%)') +
-  xlab('PCoA Axis 1 (44.1%)') +
+  ylab('PCoA Axis 2 (18.9%)') +
+  xlab('PCoA Axis 1 (44.6%)') +
   theme(legend.position = 'none') +
-  scale_color_viridis_d()
+  scale_color_brewer(type = 'qual', palette = 6) +
+  ggtitle('(a)')
 
 # plot axis 1
-p2 <- ggplot(betadisper_dat$eigenvector, aes(forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24')), PCoA1, col = forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24')), fill = forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24')))) +
+p2 <- ggplot(betadisper_dat$eigenvector, aes(forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24', 'C_high')), PCoA1, col = forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24', 'C_high')), fill = forcats::fct_relevel(group, c('lacz_ancest', 'C_1', 'C_4', 'C_24', 'C_high')))) +
   geom_hline(aes(yintercept = 0)) +
   MicrobioUoE::geom_pretty_boxplot() +
   geom_point(shape = 21, fill = 'white', size = 3, position = position_jitter(width = 0.1))  +
   theme_bw(base_size = 16, base_family = 'Helvetica') +
-  ylab('PCoA Axis 1 (44.1%)') +
+  ylab('PCoA Axis 1 (44.6%)') +
   xlab('') +
   theme(legend.position = 'none') +
-  scale_color_viridis_d() +
-  scale_fill_viridis_d() +
-  scale_x_discrete(labels = c('LacZ\nancestor', 'single\nclone', '4 clones', '24 clones'))
+  scale_color_brewer(type = 'qual', palette = 6) +
+  scale_fill_brewer(type = 'qual', palette = 6) +
+  scale_x_discrete(labels = c('LacZ\nancestor', 'single\nclone', '4 clones', '24 clones', 'negative\ncontrol')) +
+  ggtitle('(b)')
 
 group_by(betadisper_dat$eigenvector, group) %>%
   summarise(above_1 = sum(PCoA1 > 0)/n())
@@ -531,8 +536,8 @@ p_scree <- ggplot() +
 
 p3 <- p1 + p2 + plot_layout(ncol = 2, widths = c(1, 1))
 
-ggsave(file.path(path_fig, 'PCoA_plot_diversity.png'), p3, height = 5, width = 13)
-ggsave(file.path(path_fig, 'PCoA_plot_diversity.pdf'), p3, height = 5, width = 13)
+ggsave(file.path(path_fig, 'PCoA_plot_diversity.png'), p3, height = 6, width = 12)
+ggsave(file.path(path_fig, 'PCoA_plot_diversity.pdf'), p3, height = 6, width = 12)
 ggsave(file.path(path_fig, 'scree_plot.png'), p_scree, height = 5, width = 6)
 ggsave(file.path(path_fig, 'scree_plot.pdf'), p_scree, height = 5, width = 6)
 
@@ -585,23 +590,37 @@ d_table <- mutate(d_table, output = purrr::map(mod, tidy_adonis)) %>%
   filter(!is.na(p_value)) %>%
   unite(., 'd.f.', c(evol_fac, Residuals), sep = ', ') %>%
   select(clone, f_model, `d.f.`, r2, p_value) %>%
-  mutate_at(., vars(f_model, r2), function(x) round(x, 2))
+  mutate_at(., vars(f_model, r2), function(x) round(x, 2)) %>%
+  mutate_all(., as.character)
 
-table <- gt(d_table) %>%
-  cols_align('center') %>%
-  cols_label(clone = 'Clonal diversity',
+# super_fp
+super_fp <- fp_text(vertical.align = "superscript", font.size = 8, font.family = 'Times')
+
+# italics_fp
+italic_fp <- fp_text(italic = TRUE, font.size = 16, font.family = 'Times')
+
+table <- flextable(d_table) %>%
+  align(align = 'center', part = 'all') %>%
+  set_header_labels(clone = 'Clonal diversity',
              f_model = "F statistic",
-             `d.f.` = md('*d.f.*'),
-             r2 = html("R<sup>2</sup>"),
              p_value = "p value") %>%
-  gt:::as.tags.gt_tbl()
+  compose(., j = "r2", part = "header", 
+          value = as_paragraph("R", as_chunk("2", props = super_fp))) %>%
+  compose(., j = "d.f.", part = "header", 
+          value = as_paragraph(as_chunk("d.f.", props = italic_fp))) %>%
+  font(fontname = 'Times', part = 'all') %>%
+  fontsize(size = 16, part = 'all') %>%
+  autofit()
 
-# change font
-table[[1]]$children[[1]] <- gsub(
-  "font-family: [[:print:]]*\n",
-  "font-famuly: 'Times New Roman';\n",
-  table[[1]]$children[[1]]
-)
+# save as a png ####
+# create an Rmd file
+rmd_name <- tempfile(fileext = ".Rmd")
+cat("```{r echo=FALSE}\ntable\n```", file = rmd_name)
 
-html_print(table)
-  
+# render as an html file ----
+html_name <- tempfile(fileext = ".html")
+render(rmd_name, output_format = "html_document", output_file = html_name )
+
+# get a png from the html file with webshot ----
+webshot(html_name, zoom = 2, file = "table_2.png", 
+        selector = "body > div.container-fluid.main-container > div.tabwid > table")
