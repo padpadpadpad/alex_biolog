@@ -3,6 +3,12 @@
 # load packages
 library(ggplot2)
 library(dplyr)
+library(tidyr)
+library(flextable)
+library(webshot)
+library(rmarkdown)
+library(officer)
+
 
 # figure path
 path_fig <- 'plots'
@@ -39,9 +45,11 @@ ggplot(d_preadapt, aes(evolution, log_density)) +
   facet_wrap(~ n_clones)
 
 mod_preadapt <- d_preadapt %>%
-  nest(-n_clones) %>%
-  mutate(., model = purrr::map(data, ~lm(log_density ~ evolution, .x))) %>%
-  unnest(model %>% purrr::map(broom::tidy)) %>%
+  nest(data = c(log_density, evolution)) %>%
+  mutate(., model = purrr::map(data, ~lm(log_density ~ evolution, .x)),
+         tidy_model = purrr::map(model, broom::tidy)) %>%
+  select(-c(data, model)) %>%
+  unnest(tidy_model) %>%
   filter(term == 'evolutionwithout_community') %>%
   mutate(., p.value = round(p.value, 3))
 
@@ -63,10 +71,29 @@ group_by(d_nclones, n_clones) %>%
 # even though lacZ has lower n, has higher variance than individual clone where sample size is much bigger
 # so can continue with normal lm and normal anovas
 
+d_nclones <- mutate(d_nclones, preadapt = ifelse(n_clones == 'lacz_ancestor', 'none', 'yes'))
+
 mod_treat <- lm(log_density ~ n_clones, d_nclones)
 mod_treat2 <- lm(log_density ~ 1, d_nclones)
 anova(mod_treat, mod_treat2)
-emmeans::emmeans(mod_treat, pairwise ~ n_clones)
+
+levels <- c(`single clone vs. LacZ ancestor` = '1 - lacz_ancestor',
+            `24 clones vs. LacZ ancestor` = '24 - lacz_ancestor',
+            `4 clones vs. LacZ ancestor` = '4 - lacz_ancestor',
+            `24 clones vs. 4 clones` = '24 - 4',
+            `single clone vs. 24 clones` = '1 - 24',
+            `single clone vs. 4 clones` = '1 - 4')
+
+contrasts = emmeans::emmeans(mod_treat, pairwise ~ n_clones) %>%
+  .$contrasts %>%
+  data.frame() %>%
+  mutate(contrast = forcats::fct_recode(contrast, !!!levels)) %>%
+  mutate_if(is.numeric, function(x)round(x, 2)) %>%
+  mutate_all(as.character)
+
+mod_overall <- lm(log_density ~ preadapt, d_nclones)
+
+emmeans::emmeans(mod_overall, pairwise ~ preadapt)
 
 # create plot
 ggplot(d_nclones, aes(forcats::fct_relevel(n_clones, c('lacz_ancestor', '1', '4', '24')), log_density, col = forcats::fct_relevel(n_clones, c('lacz_ancestor', '1', '4', '24')), fill = forcats::fct_relevel(n_clones, c('lacz_ancestor', '1', '4', '24')))) +
@@ -83,4 +110,39 @@ ggplot(d_nclones, aes(forcats::fct_relevel(n_clones, c('lacz_ancestor', '1', '4'
 
 ggsave(file.path(path_fig, 'abundance.png'), last_plot(), height = 5, width = 6)
 ggsave(file.path(path_fig, 'abundance.pdf'), last_plot(), height = 5, width = 6)
+
+# super_fp
+super_fp <- fp_text(vertical.align = "superscript", font.size = 8, font.family = 'Times')
+
+# italics_fp
+italic_fp <- fp_text(italic = TRUE, font.size = 16, font.family = 'Times')
+
+table <- flextable(contrasts) %>%
+  align(align = 'center', part = 'all') %>%
+  align(align = 'left', j = 'contrast', part = 'all') %>%
+  set_header_labels(t.ratio = "t ratio",
+                    p.value = "p value") %>%
+  add_footer_row(., colwidths = 6, values = '') %>%
+  compose(., j = "df", part = "header", 
+          value = as_paragraph(as_chunk("d.f.", props = italic_fp))) %>%
+  compose(., j = "contrast", part = "footer", 
+          value = as_paragraph('P values were adjusted using the Tukey method for comparing a family of 4 estimates')) %>%
+  font(fontname = 'Times', part = 'all') %>%
+  fontsize(size = 16, part = 'all') %>%
+  autofit() %>%
+  bold(i = ~ p.value < 0.05, j = ~ p.value) %>%
+  padding(padding.top = 5, part = 'footer')
+
+# save as a png ####
+# create an Rmd file
+rmd_name <- tempfile(fileext = ".Rmd")
+cat("```{r echo=FALSE}\ntable\n```", file = rmd_name)
+
+# render as an html file ----
+html_name <- tempfile(fileext = ".html")
+render(rmd_name, output_format = "html_document", output_file = html_name )
+
+# get a png from the html file with webshot ----
+webshot(html_name, zoom = 2, file = "table_s1.png", 
+        selector = "body > div.container-fluid.main-container > div.tabwid > table")
 

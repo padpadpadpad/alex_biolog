@@ -17,11 +17,19 @@ library(lme4)
 library(flextable)
 library(webshot)
 library(rmarkdown)
+library(officer)
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
 #--------------#
 # functions ####
 #--------------#
+
+# convert distance matrix to dataframe
+dist_2_df <- function(dist_ob){
+  m <- as.matrix(dist_ob) # coerce dist object to a matrix
+  xy <- t(combn(colnames(m), 2))
+  return(data.frame(xy, dist=m[xy], stringsAsFactors = FALSE))
+}
 
 # code stolen from phyloseq website
 get_top_taxa <- function(ps, tax_rank, to_keep){
@@ -113,10 +121,24 @@ min(sample_sums(ps)) # min of 28,000 Woof.
 # initial subsetting - do not want nmc_t0 or wt_ancestor
 to_keep <- filter(meta_new, ! treatment %in% c('nmc_t0', 'wt_ancestor'))
 ps2 <- prune_samples(to_keep$SampleID, ps)
+sample_sums(ps2)
+
+# rarefy once
+#ps_rare <- rarefy_even_depth(ps2)
+#saveRDS(ps_rare, 'sequencing/data/output/20171024_17:18/ps_rarefied.rds')
+ps_rare <- readRDS('sequencing/data/output/20171024_17:18/ps_rarefied.rds')
+# ps2 <- ps_rare
 
 # remove Pseudomonas fluorescens reads from the data, leave other pseudomonads in
 SBW25 = "ACAGAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGCGCGTAGGTGGTTTGTTAAGTTGGATGTGAAATCCCCGGGCTCAACCTGGGAACTGCATTCAAAACTGACTGACTAGAGTATGGTAGAGGGTGGTGGAATTTCCTGTGTAGCGGTGAAATGCGTAGATATAGGAAGGAACACCAGTGGCGAAGGCGACCACCTGGACTGATACTGACACTGAGGTGCGAAAGCGTGGGGAGCAA"
 
+# create distance from P. fluorescens table
+#d_otu_phylodist <- adephylo::distTips(phy_tree(ps2))
+#d_otu_phylodist <- dist_2_df(d_otu_phylodist)
+#d_otu_phylodist <- filter(d_otu_phylodist, X1 == SBW25) %>%
+  #select(otu = X2, dist) %>%
+  #saveRDS('sequencing/data/output/20171024_17:18/otu_dist_from_SBW25.rds')
+  
 ps2 <- subset_taxa(ps2, ! rownames(tax_table(ps2)) %in% c(SBW25))
 
 # -------------------------------------------------------------------------------#
@@ -160,13 +182,6 @@ ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
 
 # side note
 # see whether clones within replicates are on average closer to each other than clones in other replicates
-
-# convert distance matrix to dataframe
-dist_2_df <- function(dist_ob){
-  m <- as.matrix(dist_ob) # coerce dist object to a matrix
-  xy <- t(combn(colnames(m), 2))
-  return(data.frame(xy, dist=m[xy], stringsAsFactors = FALSE))
-}
 
 # calculate average distance of each clone to its sympatyric populations and allopatric populations across reps
 d_wunifrac <- dist_2_df(ps_wunifrac) %>%
@@ -360,6 +375,90 @@ fig_preadapt <- ggplot() +
 ggsave(file.path(path_fig, 'effect_of_preadapt_history.png'), fig_preadapt, height = 5, width = 12)
 ggsave(file.path(path_fig, 'effect_of_preadapt_history.pdf'), fig_preadapt, height = 5, width = 12)
 
+#---------------------------------------#
+# analysis of allopatry vs. sympatry ####
+#---------------------------------------#
+
+# filter treatments to keep
+to_keep <- filter(meta_new, treatment %in% c('4_related_clones', '4_unrelated_clones'))
+ps_sub <- prune_samples(to_keep$SampleID, ps2)
+
+# transform counts to relative abundances for ordination
+ps_sub_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
+
+# make a data frame of the sample data
+d_samp <- data.frame(sample_data(ps_sub_prop))
+d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
+                 nclones_fac = as.factor(nclones_fac),
+                 evol_fac = as.factor(evolution),
+                 treatment_fac = as.factor(treatment)) %>%
+  column_to_rownames(., 'SampleID')
+
+# calculate distance matrix
+ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
+
+# run an Adonis test
+mod_allopatry <- vegan::adonis(ps_wunifrac ~ treatment_fac, data = d_samp, n_perm = 9999)
+mod_betadisper <- betadisper(ps_wunifrac, d_samp$treatment_fac)
+
+plot(mod_betadisper)
+
+# not significant but need to make the plot
+
+# make table of effect of pre-adaptation ####
+d_table <- tibble(clone = c(1, 4, 24), mod = list(mod_div_1, mod_div_4, mod_div_24))
+
+tidy_adonis <- function(adonis_mod){
+  stuff <- adonis_mod$aov.tab %>% data.frame(stringsAsFactors = FALSE) %>%
+    tibble::rownames_to_column(var = 'factor') %>%
+    janitor::clean_names() %>%
+    rename(p_value = pr_f)
+  return(stuff)
+}
+
+d_table <- mutate(d_table, output = purrr::map(mod, tidy_adonis)) %>%
+  unnest(output) %>%
+  filter(., factor != 'Total') %>%
+  spread(factor, df) %>%
+  fill(., Residuals, .direction = 'up') %>%
+  filter(!is.na(p_value)) %>%
+  unite(., 'd.f.', c(evol_fac, Residuals), sep = ', ') %>%
+  select(clone, f_model, `d.f.`, r2, p_value) %>%
+  mutate_at(., vars(f_model, r2), function(x) round(x, 2)) %>%
+  mutate_all(., as.character)
+
+# super_fp
+super_fp <- fp_text(vertical.align = "superscript", font.size = 8, font.family = 'Times')
+
+# italics_fp
+italic_fp <- fp_text(italic = TRUE, font.size = 16, font.family = 'Times')
+
+table <- flextable(d_table) %>%
+  align(align = 'center', part = 'all') %>%
+  set_header_labels(clone = 'Clonal diversity',
+                    f_model = "F statistic",
+                    p_value = "p value") %>%
+  compose(., j = "r2", part = "header", 
+          value = as_paragraph("R", as_chunk("2", props = super_fp))) %>%
+  compose(., j = "d.f.", part = "header", 
+          value = as_paragraph(as_chunk("d.f.", props = italic_fp))) %>%
+  font(fontname = 'Times', part = 'all') %>%
+  fontsize(size = 16, part = 'all') %>%
+  autofit()
+
+# save as a png ####
+# create an Rmd file
+rmd_name <- tempfile(fileext = ".Rmd")
+cat("```{r echo=FALSE}\ntable\n```", file = rmd_name)
+
+# render as an html file ----
+html_name <- tempfile(fileext = ".html")
+render(rmd_name, output_format = "html_document", output_file = html_name )
+
+# get a png from the html file with webshot ----
+webshot(html_name, zoom = 2, file = "table_2.png", 
+        selector = "body > div.container-fluid.main-container > div.tabwid > table")
+
 #-----------------------------------------------------------------------#
 # Weighted Unifrac just on diversity, ignoring preadaptation history ####
 #-----------------------------------------------------------------------#
@@ -541,86 +640,123 @@ ggsave(file.path(path_fig, 'PCoA_plot_diversity.pdf'), p3, height = 6, width = 1
 ggsave(file.path(path_fig, 'scree_plot.png'), p_scree, height = 5, width = 6)
 ggsave(file.path(path_fig, 'scree_plot.pdf'), p_scree, height = 5, width = 6)
 
-#---------------------------------------#
-# analysis of allopatry vs. sympatry ####
-#---------------------------------------#
+# what correlates with PC1?
 
-# filter treatments to keep
-to_keep <- filter(meta_new, treatment %in% c('4_related_clones', '4_unrelated_clones'))
-ps_sub <- prune_samples(to_keep$SampleID, ps2)
+# first approach - calculate abundance change with PCoA1 with each sample
 
-# transform counts to relative abundances for ordination
-ps_sub_prop <- transform_sample_counts(ps_sub, function(x){x / sum(x)})
+d_otu_phylodist <- readRDS('sequencing/data/output/20171024_17:18/otu_dist_from_SBW25.rds')
 
-# make a data frame of the sample data
-d_samp <- data.frame(sample_data(ps_sub_prop))
-d_samp <- mutate(d_samp, nclones_fac = paste('C', n_clones, sep = '_'),
-                 nclones_fac = as.factor(nclones_fac),
-                 evol_fac = as.factor(evolution),
-                 treatment_fac = as.factor(treatment)) %>%
-  column_to_rownames(., 'SampleID')
+d_ps <- psmelt(ps_prop) %>%
+  merge(., select(betadisper_dat$eigenvector, Sample = sample, pcoa1 = PCoA1), by = 'Sample') %>%
+  janitor::clean_names() %>%
+  merge(., d_otu_phylodist, by = 'otu')
 
-# calculate distance matrix
-ps_wunifrac <- phyloseq::distance(ps_sub_prop, method = 'wunifrac')
+d_ps2 <- group_by(d_ps, kingdom, phylum, class, sample, n_clones, pcoa1) %>%
+  summarise(., abundance = sum(abundance),
+            dist = mean(dist)) %>%
+  ungroup() %>%
+  filter(!is.na(class)) %>%
+  nest(-class) %>%
+  mutate(., model = purrr::map(data, ~cor.test(~ abundance + pcoa1, .x) %>% broom::tidy())) %>%
+  unnest(model) %>%
+  mutate(., padj = p.adjust(p.value, method = 'fdr')) %>%
+  filter(., padj < 0.05 & !is.na(padj)) %>%
+  unnest(data)
 
-# run an Adonis test
-mod_allopatry <- vegan::adonis(ps_wunifrac ~ treatment_fac, data = d_samp, n_perm = 9999)
-mod_betadisper <- betadisper(ps_wunifrac, d_samp$treatment_fac)
+ggplot(d_ps2, aes(pcoa1, abundance, col = dist)) +
+  geom_point() +
+  stat_smooth(aes(group = class), method = 'lm', se = FALSE) +
+  facet_wrap(~ phylum)
 
-plot(mod_betadisper)
+ggplot(d_ps2, aes(dist, estimate)) +
+  geom_point()
 
-# not significant but need to make the plot
+d_ps <- tax_glom(ps_prop, taxrank = 'Phylum', NArm = TRUE) %>% 
+  psmelt(.) %>%
+  merge(., select(betadisper_dat$eigenvector, Sample = sample, pcoa1 = PCoA1), by = 'Sample') %>%
+  janitor::clean_names()
 
-# make table of effect of pre-adaptation ####
-d_table <- tibble(clone = c(1, 4, 24), mod = list(mod_div_1, mod_div_4, mod_div_24))
 
-tidy_adonis <- function(adonis_mod){
-  stuff <- adonis_mod$aov.tab %>% data.frame(stringsAsFactors = FALSE) %>%
-    tibble::rownames_to_column(var = 'factor') %>%
-    janitor::clean_names() %>%
-    rename(p_value = pr_f)
-  return(stuff)
-}
+# agglomerate taxa at the Genus level
+ps_prop2 <- tax_glom(ps_prop, taxrank = 'Genus', NArm = TRUE)
+ps_sub2 <- tax_glom(ps_sub, taxrank = 'Genus', NArm = TRUE)
+ps_dist <- distance(ps_prop2, 'bray')
 
-d_table <- mutate(d_table, output = purrr::map(mod, tidy_adonis)) %>%
-  unnest(output) %>%
-  filter(., factor != 'Total') %>%
-  spread(factor, df) %>%
-  fill(., Residuals, .direction = 'up') %>%
-  filter(!is.na(p_value)) %>%
-  unite(., 'd.f.', c(evol_fac, Residuals), sep = ', ') %>%
-  select(clone, f_model, `d.f.`, r2, p_value) %>%
-  mutate_at(., vars(f_model, r2), function(x) round(x, 2)) %>%
-  mutate_all(., as.character)
+nmds <- vegan::metaMDS(ps_dist, distance = 'bray')
+stressplot(nmds)
+plot(nmds)
 
-# super_fp
-super_fp <- fp_text(vertical.align = "superscript", font.size = 8, font.family = 'Times')
+ps_counts <- otu_table(ps_sub2) %>%
+  data.frame()
 
-# italics_fp
-italic_fp <- fp_text(italic = TRUE, font.size = 16, font.family = 'Times')
+# do a double principle component analysis
+ps_dpcoa <- DPCoA(ps_prop2)
 
-table <- flextable(d_table) %>%
-  align(align = 'center', part = 'all') %>%
-  set_header_labels(clone = 'Clonal diversity',
-             f_model = "F statistic",
-             p_value = "p value") %>%
-  compose(., j = "r2", part = "header", 
-          value = as_paragraph("R", as_chunk("2", props = super_fp))) %>%
-  compose(., j = "d.f.", part = "header", 
-          value = as_paragraph(as_chunk("d.f.", props = italic_fp))) %>%
-  font(fontname = 'Times', part = 'all') %>%
-  fontsize(size = 16, part = 'all') %>%
-  autofit()
+d_taxa <- psmelt(ps_prop2) %>%
+  janitor::clean_names() %>%
+  select(otu, kingdom, phylum, class, order, family, genus) %>%
+  distinct_all()
 
-# save as a png ####
-# create an Rmd file
-rmd_name <- tempfile(fileext = ".Rmd")
-cat("```{r echo=FALSE}\ntable\n```", file = rmd_name)
+# grab data out 
+d_dpcoa_sample <- tibble(axis_1_scores = ps_dpcoa$li$Axis1,
+                         axis_2_scores = ps_dpcoa$li$Axis2,
+                         type = 'sample',
+                         sample = row.names(ps_dpcoa$li))
+d_dpcoa_species <- tibble(axis_1_scores = ps_dpcoa$dls$CS1, 
+                          axis_2_scores = ps_dpcoa$dls$CS2,
+                          type = 'species',
+                          otu = row.names(ps_dpcoa$dls)) %>%
+  merge(., d_taxa, by = 'otu', all.x = TRUE)
 
-# render as an html file ----
-html_name <- tempfile(fileext = ".html")
-render(rmd_name, output_format = "html_document", output_file = html_name )
+d_dpcoa_sample <- merge(d_dpcoa_sample, rownames_to_column(d_samp, 'sample') %>% select(sample, n_clones), by = 'sample')
 
-# get a png from the html file with webshot ----
-webshot(html_name, zoom = 2, file = "table_2.png", 
-        selector = "body > div.container-fluid.main-container > div.tabwid > table")
+p1 <- gather(d_dpcoa_sample, 'axis', 'score', starts_with('axis')) %>%
+  ggplot(., aes(forcats::fct_relevel(n_clones, c('lacz_ancest', 'C_1', 'C_4', 'C_24', 'C_high')), score, col = forcats::fct_relevel(n_clones, c('lacz_ancest', 'C_1', 'C_4', 'C_24', 'C_high')), fill = forcats::fct_relevel(n_clones, c('lacz_ancest', 'C_1', 'C_4', 'C_24', 'C_high')))) +
+  geom_hline(aes(yintercept = 0)) +
+  MicrobioUoE::geom_pretty_boxplot() +
+  geom_point(shape = 21, fill = 'white', size = 3, position = position_jitter(width = 0.1))  +
+  theme_bw(base_size = 16, base_family = 'Helvetica') +
+  ylab('DPCoA Axis Score') +
+  xlab('') +
+  theme(legend.position = 'none') +
+  scale_color_brewer(type = 'qual', palette = 6) +
+  scale_fill_brewer(type = 'qual', palette = 6) +
+  scale_x_discrete(labels = c('LacZ\nancestor', 'single\nclone', '4 clones', '24 clones', 'negative\ncontrol')) +
+  facet_wrap(~axis, labeller = labeller(axis = c(axis_1_scores = 'Axis 1: 48.6 %', axis_2_scores = 'Axis 2: 25.3 %')))
+
+p2 <- gather(d_dpcoa_species, 'axis', 'score', starts_with('axis')) %>%
+  ggplot(., aes(forcats::fct_reorder(phylum, score, median), score)) +
+  geom_hline(aes(yintercept = 0)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(shape = 21, fill = 'white', size = 3, position = position_jitter(width = 0.1))  +
+  theme_bw(base_size = 16, base_family = 'Helvetica') +
+  ylab('DPCoA Axis Score') +
+  xlab('Phylum') +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~axis, labeller = labeller(axis = c(axis_1_scores = 'Axis 1: 48.6 %', axis_2_scores = 'Axis 2: 25.3 %')))
+
+p1 + p2 + plot_layout(ncol = 1)
+
+# grab 
+
+p1 <- plot_ordination(ps_prop2, ps_dpcoa, type = 'samples', col = 'n_clones') +
+  stat_ellipse()
+p2 <- plot_ordination(ps_prop2, ps_dpcoa, type = 'species', col = 'Phylum')
+
+p1 + p2
+
+d_ps2 <- filter(d_ps, Abundance > 0) %>%
+  group_by(OTU) %>%
+  filter(., n() > 10) %>%
+  nest(-OTU) %>%
+  mutate(., model = purrr::map(data, ~cor.test(~ Abundance + PCoA1, .x) %>% broom::tidy())) %>%
+  unnest(model) %>%
+  filter(., p.value < 0.05) %>%
+  unnest(data)
+  
+
+
+ggplot(filter(d_ps2, Genus == 'Chitinophaga'), aes(PCoA1, Abundance)) +
+  geom_point() +
+  facet_wrap(~OTU, scales = 'free_y')

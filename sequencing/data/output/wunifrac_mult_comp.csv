@@ -1,11 +1,7 @@
 "contrast","n","R2","pval","pvalBon","pvalFDR"
-"single clone vs. negative control","48, 6",0.088,0.0031,0.031,0.031
-"single clone vs. LacZ ancestor","48, 6",0.016,0.46,4.6,0.51
-"single clone vs. 4 clones","48, 23",0.0089,0.66,6.6,0.66
-"single clone vs. 24 clones","48, 12",0.076,0.0033,0.033,0.016
-"negative control vs. LacZ ancestor","6, 6",0.35,0.02,0.2,0.039
-"4 clones vs. negative control","23, 6",0.15,0.0076,0.076,0.025
-"4 clones vs. LacZ ancestor","23, 6",0.036,0.37,3.7,0.46
-"24 clones vs. negative control","12, 6",0.12,0.039,0.39,0.056
-"24 clones vs. LacZ ancestor","12, 6",0.17,0.02,0.2,0.034
-"24 clones vs. 4 clones","12, 23",0.11,0.0078,0.078,0.02
+"single clone vs. LacZ ancestor","48, 6",0.017,0.45,2.7,0.54
+"single clone vs. 4 clones","48, 23",0.0085,0.68,4.1,0.68
+"single clone vs. 24 clones","48, 12",0.078,0.0019,0.011,0.011
+"4 clones vs. LacZ ancestor","23, 6",0.037,0.35,2.1,0.53
+"24 clones vs. LacZ ancestor","12, 6",0.17,0.018,0.11,0.036
+"24 clones vs. 4 clones","12, 23",0.11,0.0046,0.028,0.014
