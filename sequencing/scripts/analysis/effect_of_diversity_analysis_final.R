@@ -2,6 +2,7 @@
 rm(list = ls())
 
 # load packages ####
+library(DESeq2)
 library(phyloseq)
 library(dplyr)
 library(tidyr)
@@ -18,6 +19,7 @@ library(flextable)
 library(webshot)
 library(rmarkdown)
 library(officer)
+
 # if not installed, install mctoolsr run devtools::install_github('leffj/mctoolsr')
 
 #--------------#
@@ -640,16 +642,87 @@ ggsave(file.path(path_fig, 'PCoA_plot_diversity.pdf'), p3, height = 6, width = 1
 ggsave(file.path(path_fig, 'scree_plot.png'), p_scree, height = 5, width = 6)
 ggsave(file.path(path_fig, 'scree_plot.pdf'), p_scree, height = 5, width = 6)
 
-# what correlates with PC1?
+# what correlates with PC1? ####
 
 # first approach - calculate abundance change with PCoA1 with each sample
 
 d_otu_phylodist <- readRDS('sequencing/data/output/20171024_17:18/otu_dist_from_SBW25.rds')
 
-d_ps <- psmelt(ps_prop) %>%
+# filter 100 most abundant taxa
+asv_abundant <- names(sort(taxa_sums(ps_sub), TRUE)[1:100]) 
+ps_sub2 <- prune_taxa(asv_abundant, ps_sub)
+taxa_names(ps_sub2) <- paste0("otu", seq(ntaxa(ps_sub2)))
+
+# add a column for difference between C_24 and everything else
+sample_data(ps_sub2)$diversity <- ifelse(sample_data(ps_sub2)$n_clones == 'C_24', 'C_high', 'C_low')
+
+# do a DESEQ analysis
+diagdds = phyloseq_to_deseq2(ps_sub2, ~ diversity)
+
+# calculate geometric means prior to estimate size factors
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans = apply(counts(diagdds), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+diagdds = DESeq(diagdds, fitType="local")
+
+res = results(diagdds)
+res = res[order(res$padj, na.last=NA), ]
+alpha = 0.05
+sigtab = res[(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps_sub2)[rownames(sigtab), ], "matrix")) %>%
+  tibble::rownames_to_column(var = 'otu') %>%
+  janitor::clean_names() %>%
+  mutate(., just = ifelse(log2fold_change < 0, 2, -1),
+         phylum2 = Hmisc::capitalize(gsub('_', ' ', phylum)))
+head(sigtab)
+
+# colours
+cols <- c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c', '#fdbf6f', '#ff7f00', '#cab2d6')
+
+# plot
+ggplot(sigtab, aes(forcats::fct_reorder(otu, log2fold_change, .desc = TRUE), log2fold_change, col = phylum2)) +
+  geom_point(size = 3) +
+  geom_hline(aes(yintercept = 0), linetype = 2) +
+  geom_text(aes(label = round(base_mean), vjust = just), col = 'black', size = MicrobioUoE::pts(12)) +
+  theme_bw(base_size = 14) +
+  labs(x = 'Phylum',
+       y = 'log2 fold change in abundance') +
+  scale_x_discrete(labels = arrange(sigtab, desc(log2fold_change)) %>% pull(phylum2)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(c(-2.2, 5)) +
+  scale_color_manual('Phylum', values = cols) +
+  theme(legend.position = c(0.85, 0.75),
+        legend.background = element_blank(),
+        plot.margin = unit(c(0.5, 0.5, 0.5, 2), 'cm'))
+  
+ggsave(file.path(path_fig, 'abundance_change.pdf'), last_plot(), height = 8, width = 10)
+ggsave(file.path(path_fig, 'abundance_change.png'), last_plot(), height = 8, width = 10)
+
+
+ps_tree <- prune_taxa(c(asv_abundant, SBW25), ps)
+
+d_otu_phylodist <- adephylo::distTips(phy_tree(ps_tree))
+d_otu_phylodist <- dist_2_df(d_otu_phylodist)
+d_otu_phylodist <- filter(d_otu_phylodist, X1 == SBW25 | X2 == SBW25) %>%
+  mutate(., otu = ifelse(X1 == SBW25, X2, X1)) %>%
+  select(otu, dist)
+
+# have a look at changes in abundance using DESeq2
+
+
+d_ps <- prune_taxa(asv_abundant, ps_sub2) %>%
+  psmelt(.) %>%
   merge(., select(betadisper_dat$eigenvector, Sample = sample, pcoa1 = PCoA1), by = 'Sample') %>%
   janitor::clean_names() %>%
-  merge(., d_otu_phylodist, by = 'otu')
+  merge(., d_otu_phylodist, by = 'otu', all.x = TRUE)
+
+# analyse abundance changes
+ggplot(d_ps, aes(pcoa1, abundance, col = dist)) +
+  geom_point() +
+  stat_smooth(aes(group = otu), method = 'lm', se = FALSE) +
+  facet_wrap(~ phylum)
 
 d_ps2 <- group_by(d_ps, kingdom, phylum, class, sample, n_clones, pcoa1) %>%
   summarise(., abundance = sum(abundance),
