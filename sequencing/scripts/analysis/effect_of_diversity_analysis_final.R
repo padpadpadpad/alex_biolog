@@ -675,7 +675,9 @@ gm_mean = function(x, na.rm=TRUE){
 }
 geoMeans = apply(counts(diagdds), 1, gm_mean)
 diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+dds_effectoftreatment <- DESeq(diagdds, test="LRT", reduced=~ diversity)
 diagdds = DESeq(diagdds, fitType="local")
+dds_effectoftreatment <- DESeq(diagdds, test="LRT", reduced=~ 1)
 
 res = results(diagdds, pAdjustMethod = 'fdr')
 res = res[order(res$padj, na.last=NA), ]
@@ -701,9 +703,10 @@ ggplot(sigtab, aes(forcats::fct_reorder(otu, log2fold_change, .desc = TRUE), log
   geom_hline(aes(yintercept = 0), linetype = 2) +
   geom_text(aes(y = pos, label = round(base_mean), vjust = just), col = 'black', size = MicrobioUoE::pts(12)) +
   theme_bw(base_size = 14) +
-  labs(x = 'ASV (number denotes ranked abundance)',
+  labs(x = 'Phylum of each ASV',
        y = 'log2 fold change in abundance') +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(labels = arrange(sigtab, desc(log2fold_change)) %>% pull(phylum2)) +
   ylim(c(-2.5, 7)) +
   theme(legend.position = c(0.85, 0.75),
         legend.background = element_blank(),
@@ -712,7 +715,6 @@ ggplot(sigtab, aes(forcats::fct_reorder(otu, log2fold_change, .desc = TRUE), log
   
 ggsave(file.path(path_fig, 'abundance_change.pdf'), last_plot(), height = 8, width = 10)
 ggsave(file.path(path_fig, 'abundance_change.png'), last_plot(), height = 8, width = 10)
-
 
 ps_tree <- prune_taxa(c(asv_abundant, SBW25), ps)
 
@@ -723,7 +725,17 @@ d_otu_phylodist <- filter(d_otu_phylodist, X1 == SBW25 | X2 == SBW25) %>%
   select(otu, dist)
 
 # have a look at changes in abundance using DESeq2
+sigtab <- rename(sigtab, abundance = otu) %>%
+  merge(., select(x, otu, abundance), by = 'abundance') %>%
+  merge(., d_otu_phylodist, by = 'otu')
 
+ggplot(sigtab, aes(dist, log2fold_change)) +
+  geom_point()
+
+cor.test(sigtab$log2fold_change, sigtab$dist, method = 'pearson')
+
+ggplot(sigtab, aes(dist, log2(base_mean))) +
+  geom_point()
 
 d_ps <- prune_taxa(asv_abundant, ps_sub2) %>%
   psmelt(.) %>%
