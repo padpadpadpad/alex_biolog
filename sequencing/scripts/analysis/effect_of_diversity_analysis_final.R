@@ -648,10 +648,20 @@ ggsave(file.path(path_fig, 'scree_plot.pdf'), p_scree, height = 5, width = 6)
 
 d_otu_phylodist <- readRDS('sequencing/data/output/20171024_17:18/otu_dist_from_SBW25.rds')
 
-# filter 100 most abundant taxa
-asv_abundant <- names(sort(taxa_sums(ps_sub), TRUE)[1:100]) 
+# filter 200 most abundant taxa
+n_otu <- 100
+
+asv_abundant <- names(sort(taxa_sums(ps_sub), TRUE)[1:n_otu]) 
 ps_sub2 <- prune_taxa(asv_abundant, ps_sub)
-taxa_names(ps_sub2) <- paste0("otu", seq(ntaxa(ps_sub2)))
+
+# assign otu number by total abundance
+x <- tibble(otu = names(sort(taxa_sums(ps_sub2), TRUE)),
+            abundance = paste('ASV', 1:n_otu, sep = ' ')) %>%
+  merge(., tibble(otu = taxa_names(ps_sub2),
+                  order = 1:n_otu), by = 'otu') %>%
+  arrange(order)
+
+taxa_names(ps_sub2) <- x$abundance
 
 # add a column for difference between C_24 and everything else
 sample_data(ps_sub2)$diversity <- ifelse(sample_data(ps_sub2)$n_clones == 'C_24', 'C_high', 'C_low')
@@ -667,7 +677,7 @@ geoMeans = apply(counts(diagdds), 1, gm_mean)
 diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
 diagdds = DESeq(diagdds, fitType="local")
 
-res = results(diagdds)
+res = results(diagdds, pAdjustMethod = 'fdr')
 res = res[order(res$padj, na.last=NA), ]
 alpha = 0.05
 sigtab = res[(res$padj < alpha), ]
@@ -675,27 +685,30 @@ sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps_sub2)[rownames(sigtab),
   tibble::rownames_to_column(var = 'otu') %>%
   janitor::clean_names() %>%
   mutate(., just = ifelse(log2fold_change < 0, 2, -1),
+         pos = ifelse(log2fold_change < 0, log2fold_change - lfc_se, log2fold_change + lfc_se),
          phylum2 = Hmisc::capitalize(gsub('_', ' ', phylum)))
 head(sigtab)
 
 # colours
 cols <- c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c', '#fdbf6f', '#ff7f00', '#cab2d6')
 
+# add new place for labels
+
 # plot
 ggplot(sigtab, aes(forcats::fct_reorder(otu, log2fold_change, .desc = TRUE), log2fold_change, col = phylum2)) +
   geom_point(size = 3) +
+  geom_linerange(aes(x = otu, ymin = log2fold_change - lfc_se, ymax = log2fold_change+ lfc_se)) +
   geom_hline(aes(yintercept = 0), linetype = 2) +
-  geom_text(aes(label = round(base_mean), vjust = just), col = 'black', size = MicrobioUoE::pts(12)) +
+  geom_text(aes(y = pos, label = round(base_mean), vjust = just), col = 'black', size = MicrobioUoE::pts(12)) +
   theme_bw(base_size = 14) +
-  labs(x = 'Phylum',
+  labs(x = 'ASV (number denotes ranked abundance)',
        y = 'log2 fold change in abundance') +
-  scale_x_discrete(labels = arrange(sigtab, desc(log2fold_change)) %>% pull(phylum2)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  ylim(c(-2.2, 5)) +
-  scale_color_manual('Phylum', values = cols) +
+  ylim(c(-2.5, 7)) +
   theme(legend.position = c(0.85, 0.75),
         legend.background = element_blank(),
-        plot.margin = unit(c(0.5, 0.5, 0.5, 2), 'cm'))
+        plot.margin = unit(c(0.5, 0.5, 0.5, 2), 'cm')) +
+  scale_color_manual('Phylum', values = cols)
   
 ggsave(file.path(path_fig, 'abundance_change.pdf'), last_plot(), height = 8, width = 10)
 ggsave(file.path(path_fig, 'abundance_change.png'), last_plot(), height = 8, width = 10)
