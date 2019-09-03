@@ -192,7 +192,7 @@ V_P_plot <- ggplot(V_P, aes(evolved, V_P)) +
   geom_point(aes(evolved, V_P), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_P, evolved != 'ancestor')) +
   geom_point(aes(evolved, V_P), shape = 21, fill = 'white', size = 5, filter(V_P, evolved == 'ancestor')) +
   ylab('phenotypic variance') +
-  xlab('evolved') +
+  xlab('') +
   theme_bw(base_size = 16) +
   theme(legend.position = 'none') +
   ggtitle(expression(Phenotypic~variance~(V[P])))

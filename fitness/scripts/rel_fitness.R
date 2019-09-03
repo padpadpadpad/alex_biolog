@@ -110,7 +110,7 @@ table <- gt(d_table) %>%
 # change font
 table[[1]]$children[[1]] <- gsub(
   "font-family: [[:print:]]*\n",
-  "font-famuly: 'Times New Roman';\n",
+  "font-family: 'Times New Roman';\n",
   table[[1]]$children[[1]]
 )
 

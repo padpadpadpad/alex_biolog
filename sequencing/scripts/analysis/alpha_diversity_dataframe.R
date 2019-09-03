@@ -1,4 +1,4 @@
-# look at alpha diversity 
+# look at alpha diversity and pielous evenness
 
 # load packages ####
 library(phyloseq)
@@ -37,23 +37,23 @@ ps_sub <- prune_taxa(taxa_sums(ps) > 0, ps)
 
 # metadata ###
 m <- sample_data(ps_sub) %>%
-  select(., SampleID, sample_name, treatment, evolution, preadapt_pop) %>%
+  select(., SampleID, sample_name, treatment, evolution, preadapt_pop, n_clones) %>%
   data.frame() %>%
   janitor::clean_names()
 
 # calculate diversity measures of each sample ####
-a_div <- estimate_richness(ps) %>%
+a_div <- estimate_richness(ps, measures = c('Shannon', 'Observed')) %>%
   mutate(., SampleID = row.names(.)) %>%
   mutate(., pielou = Shannon / log(Observed)) %>%
   janitor::clean_names() %>%
   merge(., m, by = 'sample_id') %>%
   mutate_at(., c('sample_id', 'treatment', 'sample_name', 'evolution'), as.character) 
 
-a_div <- select(a_div, sample_id, treatment, evolution, preadapt_pop, observed, pielou, inv_simpson) %>%
-  filter(treatment != 'wt_ancestor')
+a_div <- select(a_div, sample_id, treatment, evolution, preadapt_pop, observed, pielou, n_clones) %>%
+  filter(! treatment %in% c('wt_ancestor', 'nmc_t0', 'negative_control'))
 
 # first plot of observed OTUs and evenness ####
-gather(a_div, 'metric', 'value', c(observed, pielou, inv_simpson)) %>%
+gather(a_div, 'metric', 'value', c(observed, pielou)) %>%
   ggplot(., aes(treatment, value)) +
   MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
   geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15), size = 3) +
@@ -64,6 +64,31 @@ gather(a_div, 'metric', 'value', c(observed, pielou, inv_simpson)) %>%
 ggsave(file.path(path_fig, 'alpha_diversity.png'), last_plot(), height = 5, width = 10)
 
 # look at individual clones only, does evolution with and without community impact diversity and evenness ####
+
+# run a test on evenness and diversity across evolution lines
+head(a_div)
+
+a_div_preadapt <- filter(a_div, ! treatment %in% c('lacz_ancestor', '4_unrelated_clones'))
+
+gather(a_div_preadapt, 'metric', 'value', c(observed, pielou)) %>%
+  ggplot(., aes(evolution, value)) +
+  MicrobioUoE::geom_pretty_boxplot(fill = 'black', col = 'black') +
+  geom_point(shape = 21, fill = 'white', position = position_jitter(width = 0.15), size = 3) +
+  ggtitle('Diversity and evenness across treatments') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~n_clones, scale = 'free_y')
+
+d_mods <- group_by(a_div_preadapt, n_clones) %>%
+  nest() %>%
+  mutate(mod_alpha = purrr::map(data, ~lm(observed ~ evolution, .x)),
+         mod_evenness = purrr::map(data, ~lm(pielou ~ evolution, .x)))
+
+d_mod_alpha <- d_mods %>%
+  unnest(mod_alpha %>% purrr::map(broom::tidy)) %>%
+  filter(term == 'evolutionwithout_community')
+d_mod_pielou <- d_mods %>%
+  unnest(mod_evenness %>% purrr::map(broom::tidy)) %>%
+  filter(term == 'evolutionwithout_community')
 
 # filter
 a_div_ind <- filter(a_div, treatment == 'individual_clone')
