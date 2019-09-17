@@ -93,7 +93,7 @@ plot1 <- ggplot(filter(d_t4_590, mean_od > 0.05)) +
   geom_line(aes(forcats::fct_reorder(substrate, rank), od_cor, group = sample, col = evolved), alpha = 1) +
   theme_bw(base_size = 16) +
   theme(legend.position = 'none',
-        axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+        axis.text.x = element_text(angle = 25, hjust = 1, size = 10)) +
   ylab(expression(OD[590])) +
   xlab('substrate') +
   scale_color_manual(values = c('#e41a1c', 'dark grey', 'black')) +
@@ -188,15 +188,20 @@ V_E_plot <- ggplot(V_E_pop, aes(evolved, V_E)) +
 
 
 V_P_plot <- ggplot(V_P, aes(evolved, V_P)) +
-  geom_pretty_boxplot(aes(evolved, V_P), filter(V_P, evolved != 'ancestor'), col = 'black', fill = 'black') +
-  geom_point(aes(evolved, V_P), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_P, evolved != 'ancestor')) +
-  geom_point(aes(evolved, V_P), shape = 21, fill = 'white', size = 5, filter(V_P, evolved == 'ancestor')) +
+  geom_pretty_boxplot(aes(evolved, V_P, col = evolved, fill = evolved), filter(V_P, evolved != 'ancestor')) +
+  geom_point(aes(evolved, V_P, col = evolved), shape = 21, fill = 'white', size = 5, position = position_jitter(width = 0.1), filter(V_P, evolved != 'ancestor')) +
+  geom_point(aes(evolved, V_P), col = '#e41a1c', size = 7, filter(V_P, evolved == 'ancestor')) +
   ylab('phenotypic variance') +
   xlab('') +
   theme_bw(base_size = 16) +
   theme(legend.position = 'none') +
-  ggtitle(expression(Phenotypic~variance~(V[P])))
+  ggtitle(expression(Phenotypic~variance~(V[P]))) +
+  scale_x_discrete(labels = c('LacZ\nancestor', 'pre-adapted\nwith nmc', 'pre-adapted\nwithout nmc')) +
+  scale_color_manual('', values = c('dark grey', 'black')) +
+  scale_fill_manual('', values = c('dark grey', 'black')) +
+  ylim(c(0,0.8))
 
+ggsave(file.path(path_fig, 'Vp.png'), V_P_plot, height = 6, width = 7)
 
 # plot
 plot2 <- V_P_plot + V_G_plot + V_E_plot
